@@ -1,0 +1,162 @@
+{
+  "Camera": {
+    "Generic": {
+      "ImageFormatControl": {
+        "Resolution": {
+          "Width": 4096,
+          "Height": 3008
+        },
+        "PixelFormat": {
+          "Value": "BayerRG8",
+          "Comment": "Standard value is BayerRG12Packed, however OpenCV works with 8 bit so BayerRG8 is preferred"
+        },
+        "BinningType": {
+          "Value": [
+            "Disabled",
+            "Bayer4x4"
+          ],
+          "Comment": "Binning can be used to reduce the amount of network traffic by compressing the images before sending them. This could be useful for a live preview, however this is not recommended if images are used for analysis"
+        }
+      },
+      "AcquisitionControl": {
+        "ExposureMode": "TimedTriggered",
+        "ExposureTime": 153770
+      },
+      "TimedTriggered_Parameters": {
+        "FrameAverage": {
+          "Value": 1,
+          "Description": "Number of frames, a single image is created by averaging the frames"
+        },
+        "MultiExposureNumber": {
+          "Value": 1,
+          "Description": "Number of exposures, a single frame is created by adding the exposures"
+        },
+        "MultiExposureInactiveRaw": {
+          "Value": 250,
+          "Description": "Time between the exposures that make up a single frame"
+        }
+      },
+      "TransportLayerControl": {
+        "GevSCPSPacketSize": {
+          "Value": [
+            1060,
+            8228
+          ],
+          "Comment": "Maximum amount of bytes per ethernet frame. A higher maximum results in better performance, but router must support Jumbo frames"
+        }
+      }
+    },
+    "Advanced": [
+      {
+        "Camera": "A",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",
+        "Gain": 240,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 1.118,
+          "Green": 0.949,
+          "Blue": 1.152
+        }
+      },
+      {
+        "Camera": "B",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 1.762,
+          "Green": 1.525,
+          "Blue": 3.558
+        }
+      },
+      {
+        "Camera": "C",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      },
+      {
+        "Camera": "D",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:40",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      },
+      {
+        "Camera": "E",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:41))",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      },
+      {
+        "Camera": "F",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:42)",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      },
+      {
+        "Camera": "G",
+        "ID": "-",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      },
+      {
+        "Camera": "H",
+        "ID": "-",
+        "Gain": 24,
+        "BlackLevel": 64,
+        "ColorCorrection": {
+          "Red": 0,
+          "Green": 0,
+          "Blue": 0
+        }
+      }
+    ]
+  },
+  "Raspberry": {
+    "Name": "VQuIT-RemoteIO",
+    "IP_addr": "192.168.7.239",
+    "GPIO_Setup": [
+      {
+        "Pin": 1,
+        "Type": "Output",
+        "Description": "This is a test pin"
+      },
+      {
+        "Pin": 2,
+        "Type": "Input",
+        "Description": "This is a test pin"
+      }
+    ]
+  },
+  "Testing": {
+    "ImageTestLabel": "test0",
+    "QR_Scanning": 1,
+    "ImagePlots": 1,
+    "ReducedImageDetection": 1
+  }
+}

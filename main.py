@@ -11,6 +11,9 @@ from harvesters.core import Harvester
 # Image processing
 import cv2
 
+# Raspberry controller
+import pigpio as gpio
+
 # Data container
 from scipy import ndimage
 import numpy as np
@@ -18,6 +21,9 @@ import numpy as np
 # Barcode scanner
 from pylibdmtx.pylibdmtx import decode as getDataMatrix
 from pyzbar.pyzbar import decode as getBarcode
+
+# Read JSON files
+import json
 
 # Misc
 import os
@@ -30,35 +36,37 @@ import time
 # Quick parameters #
 ####################
 
+with open('VQuIT_config.json', 'r') as configFile:
+    configData = json.load(configFile)
+
 codeScanning = 0    # Enable scan increases runtime significantly
 
-scaling = 0         # 0 = full resolution
 jumboPackets = 0
 compact = 1         # 1 = less filters & plots
 imgPlots = 1        # 0 = no plots
 
 binning = 0
 
-imgLabel = 'test1'  # image label name for cameraTest
+imgLabel = 'test6'  # image label name for cameraTest
 
 # Original
 camID = [  # Comment out cameras when not in use
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",  # A
-    # "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",   # B
-    # "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",   # C
-    # "D-12A09c_GV-S01(70:b3:d5:85:40:40)",   # D
-    # "D-12A09c_GV-S01(70:b3:d5:85:40:41)",   # E
-    # "D-12A09c_GV-S01(70:b3:d5:85:40:42)"    # F
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",   # A
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",   # B
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",   # C
+    "D-12A09c_GV-S01(70:b3:d5:85:40:40)",   # D
+    "D-12A09c_GV-S01(70:b3:d5:85:40:41)",   # E
+    "D-12A09c_GV-S01(70:b3:d5:85:40:42)"    # F
 ]
 
 # Assign parameters linked to cameraID
 camInfo = [[  # ID
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",  # A
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",  # B
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",  # C
-    "D-12A09c_GV-S01(70:b3:d5:85:40:40)",  # D
-    "D-12A09c_GV-S01(70:b3:d5:85:40:41)",  # E
-    "D-12A09c_GV-S01(70:b3:d5:85:40:42)"  # F
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",   # A
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",   # B
+    "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",   # C
+    "D-12A09c_GV-S01(70:b3:d5:85:40:40)",   # D
+    "D-12A09c_GV-S01(70:b3:d5:85:40:41)",   # E
+    "D-12A09c_GV-S01(70:b3:d5:85:40:42)"    # F
 ], [  # GainRaw
     240, 24, 0, 0, 0, 0
 ], [  # BlackLevelRaw
@@ -314,6 +322,35 @@ class ImageAcquirer:
 IA = ImageAcquirer()
 
 
+# Raspberry Pi remote access
+class RaspberryPi:
+    # Connect to pi
+    rpi = gpio.pi('192.168.7.239')     # VQuIT-RemoteIO
+
+    def Disconnect(self):
+        self.rpi.stop()
+
+    def PinMode(self, pin, state):
+        if state is 'input':
+            self.rpi.set_mode(pin, gpio.INPUT)
+        elif state is 'output':
+            self.rpi.set_mode(pin, gpio.OUTPUT)
+        else:
+            print("Bad state for GPIO pin")
+
+    def Write(self, pin, value):
+        self.rpi.write(pin, value)
+
+    def Read(self, pin):
+        return self.rpi.read(pin)
+
+    def Setup(self):
+        self.PinMode(4, 'input')
+
+
+IO = RaspberryPi()
+
+
 # Image manipulation & analysis
 class Image:
     # Original images
@@ -469,17 +506,6 @@ class OpenCV:
     ksize = 25
     ddepth = cv2.CV_8U
 
-    def Config(self, scalingActive):
-        # Get CV info
-        #print(cv2.getBuildInformation())
-
-        # Scaling
-        print("Scaling: ", scalingActive)
-
-        if scalingActive:
-            Image.NR_Blur = 5  # Blur mask to smoothen image features
-            self.ksize = 5  # Used for filters
-
     def Sobel(self, im, scale, threshold, orientation):
         if orientation == 0:
             sobel = cv2.Sobel(im, self.ddepth, 1, 0, self.ksize, scale)  # Sobel X
@@ -585,7 +611,7 @@ IA.Scan(len(camID))                                 # check if producer is avail
 IA.Create()                                         # define image Acquirer objects from discovered devices
 
 IA.Config(camID, camInfo, jumboPackets, binning)    # configure image acquirer objects
-CV.Config(scaling)                                  # configure openCV settings
+IO.Setup()                                          # run setup for raspberry pi
 
 System.ConfigScaling(IA.GigE[0])                    # configure scaling based on monitors
 
@@ -600,7 +626,7 @@ def mainLoop():
     imgsIn = []
     for iteration in range(0, len(IA.GigE)):
         print("Camera ", iteration, ": ", end='')
-        IA.camConfig(iteration, exposure=153770)
+        IA.camConfig(iteration, exposure=90000, gain=5, blackLevel=0)
         #IA.camConfig(iteration, acqPeriod=154010, exposure=93770, gain=1, blackLevel=None)
         imgData = IA.RequestFrame(iteration)
         imgsIn.append(imgData)
@@ -640,15 +666,16 @@ def cameraTestLoop(camera):
     imgsIn = []
 
     testSettings = [[                       # Exposure (Time during which the sensor is exposed to light)
-        102549, 102549, 102549, 102549      # Microseconds (Datasheet {min: 40 µs, max: acq - 226µs}, Software {min:15})
+        80000, 85000, 90000, 102000      # Microseconds (Datasheet {min: 40 µs, max: acq - 226µs}, Software {min:15})
     ], [                                    # Gain (more gain = more noise) Analog gain: 0->24dB Digital gain: 24->48dB
-        240, 240, 100, 100                  # 1 = 0.1 dB
+        5, 5, 5, 5                  # 1 = 0.1 dB
     ], [  # Black level - Prevent clipping of the minimum value above 0 (Used to bring the minimum values closer to 0 if they are shifted up by gain)
-        0, 64, 0, 64                      # 0 to 4095 (higher = brighter picture)
+        0, 0, 0, 0                      # 0 to 4095 (higher = brighter picture)
     ]]
 
     # Live preview until interrupted by Ctrl+c
     preview = True
+    IA.camConfig(camera, exposure=9000, gain=1, blackLevel=0)
     while preview:
         imgData = IA.RequestFrame(camera)
         imgData = np.array(Image.Scale(imgData, newHeight=1050, newWidth=1430), dtype=np.uint8)
@@ -684,7 +711,7 @@ while run:
     Timer.Start()
 
     #mainLoop()
-    run = cameraTestLoop(0)
+    #run = cameraTestLoop(0)
 
     # Check abort key
     key = cv2.waitKey(1)
