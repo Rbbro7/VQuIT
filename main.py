@@ -36,9 +36,6 @@ import time
 # Quick parameters #
 ####################
 
-with open('VQuIT_config.json', 'r') as configFile:
-    configData = json.load(configFile)
-
 codeScanning = 0    # Enable scan increases runtime significantly
 
 jumboPackets = 0
@@ -83,6 +80,24 @@ camInfo = [[  # ID
 #############
 # Functions #
 #############
+
+# Read and write data to files
+class Files:
+    configData = ""
+
+    def Temp(self):
+        # Read Configuration File
+        with open('VQuIT_Config.json', 'r') as configFile:
+            self.configData = json.load(configFile)
+
+        # Append to database
+        with open('VQuIT_Database.json', 'a') as database:
+            data = "New Data"
+            json.dump(data, database)
+
+
+Files = Files()
+
 
 # System settings
 class System:

@@ -1,4 +1,11 @@
 {
+  "Testing": {
+    "JumboPackets": 0,
+    "ImageTestLabel": "test0",
+    "QR_Scanning": 1,
+    "ImagePlots": 1,
+    "ReducedImageDetection": 1
+  },
   "Camera": {
     "Generic": {
       "ImageFormatControl": {
@@ -115,9 +122,9 @@
       },
       {
         "Camera": "G",
-        "ID": "-",
-        "Gain": 24,
-        "BlackLevel": 64,
+        "ID": "",
+        "Gain": 0,
+        "BlackLevel": 0,
         "ColorCorrection": {
           "Red": 0,
           "Green": 0,
@@ -126,9 +133,9 @@
       },
       {
         "Camera": "H",
-        "ID": "-",
-        "Gain": 24,
-        "BlackLevel": 64,
+        "ID": "",
+        "Gain": 0,
+        "BlackLevel": 0,
         "ColorCorrection": {
           "Red": 0,
           "Green": 0,
@@ -142,21 +149,45 @@
     "IP_addr": "192.168.7.239",
     "GPIO_Setup": [
       {
-        "Pin": 1,
+        "Pin": 0,
         "Type": "Output",
         "Description": "This is a test pin"
       },
       {
-        "Pin": 2,
+        "Pin": 0,
         "Type": "Input",
         "Description": "This is a test pin"
       }
     ]
   },
-  "Testing": {
-    "ImageTestLabel": "test0",
-    "QR_Scanning": 1,
-    "ImagePlots": 1,
-    "ReducedImageDetection": 1
+  "ImageProcessing": {
+    "Sobel": {
+      "ksize": {
+        "Value": 25,
+        "Description": "Sorry nothing to see here"
+      },
+      "scale": {
+        "Value": 1,
+        "Description": "Sorry nothing to see here"
+      },
+      "threshold": {
+        "Value": 1,
+        "Description": "Sorry nothing to see here"
+      }
+    },
+    "Laplacian": {
+      "ksize": {
+        "Value": 25,
+        "Description": "Sorry nothing to see here"
+      },
+      "scale": {
+        "Value": 1,
+        "Description": "Sorry nothing to see here"
+      },
+      "threshold": {
+        "Value": 1,
+        "Description": "Sorry nothing to see here"
+      }
+    }
   }
 }
