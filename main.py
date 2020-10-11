@@ -30,66 +30,25 @@ import os
 import sys
 import ctypes
 import time
-
-
-####################
-# Quick parameters #
-####################
-
-codeScanning = 0    # Enable scan increases runtime significantly
-
-jumboPackets = 0
-compact = 1         # 1 = less filters & plots
-imgPlots = 1        # 0 = no plots
-
-binning = 0
-
-imgLabel = 'test6'  # image label name for cameraTest
-
-# Original
-camID = [  # Comment out cameras when not in use
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",   # A
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",   # B
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",   # C
-    "D-12A09c_GV-S01(70:b3:d5:85:40:40)",   # D
-    "D-12A09c_GV-S01(70:b3:d5:85:40:41)",   # E
-    "D-12A09c_GV-S01(70:b3:d5:85:40:42)"    # F
-]
-
-# Assign parameters linked to cameraID
-camInfo = [[  # ID
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",   # A
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",   # B
-    "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",   # C
-    "D-12A09c_GV-S01(70:b3:d5:85:40:40)",   # D
-    "D-12A09c_GV-S01(70:b3:d5:85:40:41)",   # E
-    "D-12A09c_GV-S01(70:b3:d5:85:40:42)"    # F
-], [  # GainRaw
-    240, 24, 0, 0, 0, 0
-], [  # BlackLevelRaw
-    64, 64, 0, 0, 0, 0
-], [  # Correction R
-    1.118, 1.762, 0, 0, 0, 0
-], [  # Correction G
-    0.949, 1.525, 0, 0, 0, 0
-], [  # Correction B
-    1.152, 3.558, 0, 0, 0, 0
-]]
+import warnings
 
 
 #############
 # Functions #
 #############
 
+
 # Read and write data to files
 class Files:
-    configData = ""
-
-    def Temp(self):
-        # Read Configuration File
+    # Return data from configuration file
+    @staticmethod
+    def config(category):
         with open('VQuIT_Config.json', 'r') as configFile:
-            self.configData = json.load(configFile)
+            data = json.load(configFile)[category]
+        return data
 
+    @staticmethod
+    def Test():
         # Append to database
         with open('VQuIT_Database.json', 'a') as database:
             data = "New Data"
@@ -101,6 +60,9 @@ Files = Files()
 
 # System settings
 class System:
+    # Start software
+    print("\nStarting VQuIT Software", end='\r')
+
     # configure scaling based on monitors
     def ConfigScaling(self, imageAcquirer):
         # get screen size
@@ -117,7 +79,7 @@ class System:
         # get camera image size
         imageHeight = imageAcquirer.remote_device.node_map.Height.value
         imageWidth = imageAcquirer.remote_device.node_map.Width.value
-        print('CAMERA: Image size = {0:d}x{1:d}'.format(imageWidth, imageHeight))
+        print('CAMERA: image size = {0:d}x{1:d}'.format(imageWidth, imageHeight))
 
         # calculate scale factor
         HScale = screenHeight / 2 / imageHeight
@@ -130,15 +92,31 @@ class System:
             self.imgScale = WScale
         else:
             self.imgScale = 1
-        print('SYSTEM: imgScale = ', self.imgScale)
+        print('SYSTEM: imgScale =', "{0:.3f}".format(self.imgScale), "\n")
 
     # Variables
     # Screen size parameters
     imgH = imgH_px = imgW_px = 0
     imgScale = 0
 
+    # Check abort key & camera conditions
+    @staticmethod
+    def Abort():
+        if cv2.waitKey(1) > 0:
+            return True
+        elif IA.thermalCondition() is "Critical":
+            return True
+        return False
+
+    # Change formatting of warnings
+    @staticmethod
+    def CustomFormatWarning(msg, *args, **kwargs):
+        # ignore everything except the message
+        return "\n\nWarning: " + str(msg) + '\n\n'
+
 
 System = System()
+warnings.formatwarning = System.CustomFormatWarning
 
 
 # Timer class
@@ -167,105 +145,127 @@ class ImageAcquirer:
     # Init harvester
     harvester = Harvester()
 
+    # Temperature
+    criticalTemp = Files.config("Cameras")["Generic"]["Temperature"]["Critical"]
+    warningTemp = Files.config("Cameras")["Generic"]["Temperature"]["Warning"]
+
     # Storage for camera modules
+    n_camera = Files.config("QuickSettings")["ActiveCameras"]
     GigE = []
 
     # Import cti file from GenTL producer
     def ImportCTI(self):
         # path to GenTL producer
-        CTIPath = r'C:\Program Files\MATRIX VISION\mvIMPACT Acquire\bin\x64\mvGenTLProducer.cti'
+        CTIPath = Files.config("Cameras")["Generic"]["CTIPath"]
 
         if os.path.isfile(CTIPath):
             self.harvester.add_file(CTIPath)
         else:
-            print("Could not find the GenTL producer for GigE")
+            print(
+                "\nCould not find the GenTL producer for GigE\nCheck the file path given in VQuIT_config.json>Cameras>Generic>CTIPath")
             sys.exit(1)
 
     # Scan for available producers
-    def Scan(self, n_camera):
-        print('Scanning for available producers..', end='')
-        for i in range(0, 100):
-            print('.', end='')
+    def Scan(self):
+        tries = 100
+        for i in range(0, tries):
             self.harvester.update()
-            if len(self.harvester.device_info_list) >= n_camera:
+            foundDevices = len(self.harvester.device_info_list)
+            print('Scanning for available cameras... ' + str(foundDevices) + " of " + str(
+                self.n_camera) + " (Attempt " + str(i) + " of " + str(tries) + ")", end='\r')
+            if foundDevices >= self.n_camera:
                 break
             time.sleep(1)
-        print("\n")
 
-        if len(self.harvester.device_info_list) < n_camera:
-            print("Error: Found ", n_camera, " of ", len(self.harvester.device_info_list),
+        if len(self.harvester.device_info_list) < self.n_camera:
+            print("Error: Found ", len(self.harvester.device_info_list), " of ", self.n_camera,
                   "requested producers in network")
             sys.exit(1)
-        print(self.harvester.device_info_list)
+        # print(self.harvester.device_info_list)     # Show details of connected devices
 
     # Create image acquirer objects
     def Create(self):
-        n_camera = len(camID)
-        print("Creating", n_camera, "IA's")
+        cameraInfo = Files.config("Cameras")["Advanced"]
 
-        for i in range(0, n_camera):
+        for i in range(0, self.n_camera):
             try:
-                # Create camera instances in order of camID array
-                newIA = self.harvester.create_image_acquirer(id_=camID[i])
+                # Create camera instances in order written in VQuIT_Config.json>Cameras>Advanced
+                newIA = self.harvester.create_image_acquirer(id_=cameraInfo[i]["ID"])
                 self.GigE.append(newIA)
             except:
-                print("Error: ID - ", camID[i], " not found")
+                print("Error: ID - " + str(
+                    cameraInfo[i]["ID"]) + " not found\n Make sure no other instances are connected to the cameras")
                 exit()
         return self.GigE
 
     # Configure image acquirer objects
-    def Config(self, cameraID, cameraInfo, jumboPacketsEnabled, binningActive):
-        if jumboPacketsEnabled:
-            packetSize = 8228
+    def Config(self):
+        # Load configuration file (Use ["Description"] instead of ["Value"] to get a description of said parameter)
+        qs = Files.config("QuickSettings")
+        c = Files.config("Cameras")
+
+        cameraInfo = c["Advanced"]
+        imgFormat = c["Generic"]["ImageFormatControl"]
+        acquisition = c["Generic"]["AcquisitionControl"]
+        transport = c["Generic"]["TransportLayerControl"]
+        trigger = c["Generic"]["TimedTriggered_Parameters"]
+
+        # Jumbo packets
+        jumboPackets = qs["JumboPackets"]
+        if jumboPackets:
+            print("Jumbo packets Active\n")
+            packetSize = transport["GevSCPSPacketSize"]["Value"][0]
         else:
-            packetSize = 1060
-            print("Warning: Running script without jumbo packets can cause quality and reliability issues")
+            print("\r")
+            warnings.warn("Running script without jumbo packets can cause quality and reliability issues")
+            time.sleep(0.2)
+            packetSize = transport["GevSCPSPacketSize"]["Value"][1]
 
         # Binning
-        print("Binning: ", binningActive)
-        imgWidth = 4096  # 4096  | Compressed = 1024
-        imgHeight = 3008  # 3008  | Compressed = 752
-        binningType = "Disabled"
-
-        if binningActive:
-            imgWidth = int(imgWidth / 4)
-            imgHeight = int(imgHeight / 4)
-            binningType = "Bayer4x4"
+        binning = qs["Binning"]
+        if binning:
+            print("Binning Active")
+            imgWidth = int(imgFormat["Resolution"]["Width"] / 4)
+            imgHeight = int(imgFormat["Resolution"]["Height"] / 4)
+            binningType = imgFormat["BinningType"]["Value"][1]
+        else:
+            imgWidth = imgFormat["Resolution"]["Width"]
+            imgHeight = imgFormat["Resolution"]["Height"]
+            binningType = imgFormat["BinningType"]["Value"][0]
 
         # Set standard camera parameters
         for i in range(0, len(self.GigE)):
+            print("Setting up camera " + cameraInfo[i]["Camera"] + "...", end="\r")
             # ImageFormatControl
-            self.GigE[i].remote_device.node_map.PixelFormat.value = "BayerRG8"  # Stock: BayerRG12Packed | Recommended: BayerRG8
+            self.GigE[i].remote_device.node_map.PixelFormat.value = imgFormat["PixelFormat"]["Value"][0]
             self.GigE[i].remote_device.node_map.Binning.value = binningType
-            self.GigE[i].remote_device.node_map.Width = imgWidth
-            self.GigE[i].remote_device.node_map.Height = imgHeight
+            self.GigE[i].remote_device.node_map.Width.value = imgWidth
+            self.GigE[i].remote_device.node_map.Height.value = imgHeight
 
             # AcquisitionControl
-            self.GigE[i].remote_device.node_map.ExposureMode.value = "TimedTriggered"  # Stock: "Timed" | Recommended: "TimedTriggered"
-            self.GigE[i].remote_device.node_map.ExposureTimeRaw.value = 153770  # Stock: 153770
+            self.GigE[i].remote_device.node_map.ExposureMode.value = acquisition["ExposureMode"]["Value"][0]
+            self.GigE[i].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]
 
             # AnalogControl
-            self.GigE[i].remote_device.node_map.GainRaw.value = cameraInfo[1][
-                cameraInfo[0].index(cameraID[i])]  # Assign right value by matching ID between camID and camInfo
-            self.GigE[i].remote_device.node_map.BlackLevelRaw.value = cameraInfo[2][
-                cameraInfo[0].index(cameraID[i])]  # Stock: 64
+            self.GigE[i].remote_device.node_map.GainRaw.value = cameraInfo[i]["Gain"]
+            self.GigE[i].remote_device.node_map.BlackLevelRaw.value = cameraInfo[i]["BlackLevel"]
 
             # TransportLayerControl   
             self.GigE[i].remote_device.node_map.GevSCPSPacketSize.value = packetSize  # Stock: 1060 | recommended 8228
 
             # TimedTriggered parameters
-            self.GigE[i].remote_device.node_map.FrameAverage.value = 1                  # number of frames, image is created by averaging the frames
-            self.GigE[i].remote_device.node_map.MultiExposureNumber.value = 1           # number of exposures, frame is created by adding the exposures
-            self.GigE[i].remote_device.node_map.MultiExposureInactiveRaw.value = 250    # time between exposures in a single frame
+            self.GigE[i].remote_device.node_map.FrameAverage.value = trigger["FrameAverage"]["Value"]
+            self.GigE[i].remote_device.node_map.MultiExposureNumber.value = trigger["MultiExposureNumber"]["Value"]
+            self.GigE[i].remote_device.node_map.MultiExposureInactiveRaw.value = trigger["MultiExposureInactive"][
+                "Value"]
 
             # Not in use
             # AcquisitionPeriod (Integration time - irrelevant when using TimedTriggered)
             # value: microseconds (min: 102775 µs @4096 x 3008 - BayerRG8 - Binning Disabled (Max frame rate 9.73 Hz) , max: 60s)
-            # self.GigE[i].remote_device.node_map.AcquisitionFramePeriodRaw.value = 154010
 
     # Start image acquisition
     def Start(self):
-        print("start image acquisition")
+        print("\nStart image acquisition\n")
         for i in range(0, len(self.GigE)):
             self.GigE[i].start_acquisition()
 
@@ -283,7 +283,8 @@ class ImageAcquirer:
         if multiExposureNumber:
             self.GigE[camNr].remote_device.node_map.MultiExposureNumber.value = multiExposureNumber
         if multiExposureInactive:
-            self.GigE[camNr].remote_device.node_map.MultiExposureInactiveRaw.value = multiExposureInactive  # time between exposures in a single frame
+            self.GigE[
+                camNr].remote_device.node_map.MultiExposureInactiveRaw.value = multiExposureInactive  # time between exposures in a single frame
 
     # Retrieve camera data
     def RequestFrame(self, camNr):
@@ -292,9 +293,9 @@ class ImageAcquirer:
             self.GigE[camNr].remote_device.node_map.TriggerSoftware.execute()  # Trigger camera
 
             # get a buffer
-            print("fetch buffer...", end='')
+            print("Camera " + str(camNr) + ": Fetch buffer...", end='\r')
             with self.GigE[camNr].fetch_buffer() as buffer:
-                print("fetched")
+                print("Camera " + str(camNr) + ": Fetched", end='\r')
                 # access the image payload
                 component = buffer.payload.components[0]
 
@@ -311,7 +312,19 @@ class ImageAcquirer:
 
     # Get camera temperature
     def getTemperature(self, camNr):
-        return float(self.GigE[camNr].remote_device.node_map.DeviceTemperatureRaw.value/100)
+        return float(self.GigE[camNr].remote_device.node_map.DeviceTemperatureRaw.value / 100)
+
+    # Return thermal performance of the camera
+    def thermalCondition(self):
+        for i in range(0, self.n_camera):
+            temp = self.getTemperature(i)
+            if temp > self.criticalTemp:
+                warnings.warn("Camera temperature critical")
+                return "Critical"
+            elif temp > self.warningTemp:
+                warnings.warn("Camera temperature above " + str(self.warningTemp))
+                return "Warning"
+        return "Normal"
 
     # Get camera features
     def getCameraAttributes(self):
@@ -319,13 +332,13 @@ class ImageAcquirer:
 
     # Stop image acquisition
     def Stop(self):
-        print("stop image acquisition")
+        print("Stop image acquisition")
         for i in range(0, len(self.GigE)):
             self.GigE[i].stop_acquisition()
 
     # Stop image acquisition
     def Destroy(self):
-        print("destroy image acquire objects")
+        print("Destroy image acquire objects")
         for i in range(0, len(self.GigE)):
             self.GigE[i].destroy()
 
@@ -340,7 +353,8 @@ IA = ImageAcquirer()
 # Raspberry Pi remote access
 class RaspberryPi:
     # Connect to pi
-    rpi = gpio.pi('192.168.7.239')     # VQuIT-RemoteIO
+    print('Connecting to Raspberry...', end='\r')
+    rpi = gpio.pi(Files.config("Raspberry")["IP_addr"])  # VQuIT-RemoteIO
 
     def Disconnect(self):
         self.rpi.stop()
@@ -359,8 +373,14 @@ class RaspberryPi:
     def Read(self, pin):
         return self.rpi.read(pin)
 
+    # Set up Raspberry I/O
     def Setup(self):
-        self.PinMode(4, 'input')
+        print("Setting up Raspberry...", end="\r")
+        try:
+            self.PinMode(4, 'input')
+        except:
+            print(
+                "\nError connecting to Raspberry.\nMake sure to run 'sudo pigpiod' on the Raspberry.\nCheck if VQuIT_Config.json>Raspberry>IP_addr has the same IP as inet when running 'ifconfig' on the Raspberry\n")
 
 
 IO = RaspberryPi()
@@ -372,31 +392,38 @@ class Image:
     original = []
 
     # Color corrected images
-    cc = []         # Original
-    cc_s = []       # Original scaled
-    ccNR = []       # Noise reduction
-    ccNR_s = []     # Noise reduction scaled
+    cc = []  # Original
+    cc_s = []  # Original scaled
+    ccNR = []  # Noise reduction
+    ccNR_s = []  # Noise reduction scaled
 
     # Gray scaled images
-    gray = []       # Original
-    gray_s = []     # Original scaled
-    grayInv = []    # Inverted
+    gray = []  # Original
+    gray_s = []  # Original scaled
+    grayInv = []  # Inverted
     grayInv_s = []  # Inverted scaled
-    grayNR = []     # Noise reduction
-    grayNR_s = []   # Noise reduction scaled
+    grayNR = []  # Noise reduction
+    grayNR_s = []  # Noise reduction scaled
+
+    # Color correction values
+    ccTable = []
+    ccData = Files.config("Cameras")["Advanced"]
+    for i in range(0, Files.config("QuickSettings")["ActiveCameras"]):
+        ccTable.append([ccData[i]["ColorCorrection"]["Red"],
+                        ccData[i]["ColorCorrection"]["Green"],
+                        ccData[i]["ColorCorrection"]["Blue"]])
 
     # Filter parameters
     NR_Blur = 25
 
     # Color correction
-    @staticmethod
-    def ColorCorrection(im, targetCam):
+    def ColorCorrection(self, im, targetCam):
         b, g, r = cv2.split(im)
 
         # Multiply color array by ID specific gain and clip at 255
-        b = np.array(np.clip(b * camInfo[5][camInfo[0].index(camID[targetCam])], 0, 255), dtype=np.uint8)
-        g = np.array(np.clip(g * camInfo[4][camInfo[0].index(camID[targetCam])], 0, 255), dtype=np.uint8)
-        r = np.array(np.clip(r * camInfo[3][camInfo[0].index(camID[targetCam])], 0, 255), dtype=np.uint8)
+        b = np.array(np.clip(b * self.ccTable[targetCam][2], 0, 255), dtype=np.uint8)
+        g = np.array(np.clip(g * self.ccTable[targetCam][1], 0, 255), dtype=np.uint8)
+        r = np.array(np.clip(r * self.ccTable[targetCam][0], 0, 255), dtype=np.uint8)
         im = cv2.merge([b, g, r])
         return im
 
@@ -462,7 +489,7 @@ class Image:
                 # Noise reduction
                 ccNR = np.array(cv2.bilateralFilter(cc, 7, 50, 50), dtype=np.uint8)
                 grayNR = np.array(cv2.bilateralFilter(gray, 7, 50, 50), dtype=np.uint8)
-                #ccNR = np.array(GaussianBlur(image, (blur, blur), 0), dtype=np.uint8)
+                # ccNR = np.array(GaussianBlur(image, (blur, blur), 0), dtype=np.uint8)
 
                 # Scaling
                 cc_s = np.array(self.Scale(cc, multiplier=System.imgScale), dtype=np.uint8)
@@ -580,7 +607,7 @@ class OpenCV:
             laplacian = Image.Scale(laplacian, newWidth=imgW_px, newHeight=System.imgH_px)
             laplacianThresh = Image.Scale(laplacianThresh, newWidth=imgW_px, newHeight=System.imgH_px)
 
-            #cannyImg = Image.Scale(cannyImg, newWidth=imgW_px, newHeight=System.imgH_px)
+            # cannyImg = Image.Scale(cannyImg, newWidth=imgW_px, newHeight=System.imgH_px)
 
             # Merge images
             row0 = np.hstack([Image.grayNR_s[imageNr], Image.grayInv_s[imageNr]])
@@ -621,14 +648,14 @@ CV = OpenCV()
 # Setup #
 #########
 
-IA.ImportCTI()                                      # import cti file
-IA.Scan(len(camID))                                 # check if producer is available
-IA.Create()                                         # define image Acquirer objects from discovered devices
+IA.ImportCTI()  # import cti file
+IA.Scan()  # check if producer is available
+IA.Create()  # define image Acquirer objects from discovered devices
 
-IA.Config(camID, camInfo, jumboPackets, binning)    # configure image acquirer objects
-IO.Setup()                                          # run setup for raspberry pi
+IA.Config()  # configure image acquirer objects
+IO.Setup()  # run setup for raspberry pi
 
-System.ConfigScaling(IA.GigE[0])                    # configure scaling based on monitors
+System.ConfigScaling(IA.GigE[0])  # configure scaling based on monitors
 
 
 #############
@@ -640,9 +667,8 @@ def mainLoop():
     # Request camera frames
     imgsIn = []
     for iteration in range(0, len(IA.GigE)):
-        print("Camera ", iteration, ": ", end='')
+        print("Camera " + str(iteration) + ": ", end='\r')
         IA.camConfig(iteration, exposure=90000, gain=5, blackLevel=0)
-        #IA.camConfig(iteration, acqPeriod=154010, exposure=93770, gain=1, blackLevel=None)
         imgData = IA.RequestFrame(iteration)
         imgsIn.append(imgData)
 
@@ -658,7 +684,7 @@ def mainLoop():
     for iteration in range(0, len(imgsIn)):
         if imgsIn[iteration] is not 0:
             # Crop image
-            #img = Image.Crop(img, 450, 600, 375, 525)
+            # img = Image.Crop(img, 450, 600, 375, 525)
 
             if codeScanning:
                 # Scan for barcodes
@@ -680,12 +706,13 @@ def mainLoop():
 def cameraTestLoop(camera):
     imgsIn = []
 
-    testSettings = [[                       # Exposure (Time during which the sensor is exposed to light)
-        80000, 85000, 90000, 102000      # Microseconds (Datasheet {min: 40 µs, max: acq - 226µs}, Software {min:15})
-    ], [                                    # Gain (more gain = more noise) Analog gain: 0->24dB Digital gain: 24->48dB
-        5, 5, 5, 5                  # 1 = 0.1 dB
-    ], [  # Black level - Prevent clipping of the minimum value above 0 (Used to bring the minimum values closer to 0 if they are shifted up by gain)
-        0, 0, 0, 0                      # 0 to 4095 (higher = brighter picture)
+    testSettings = [[  # Exposure (Time during which the sensor is exposed to light)
+        80000, 85000, 90000, 102000  # Microseconds (Datasheet {min: 40 µs, max: acq - 226µs}, Software {min:15})
+    ], [  # Gain (more gain = more noise) Analog gain: 0->24dB Digital gain: 24->48dB
+        5, 5, 5, 5  # 1 = 0.1 dB
+    ], [
+        # Black level - Prevent clipping of the minimum value above 0 (Used to bring the minimum values closer to 0 if they are shifted up by gain)
+        0, 0, 0, 0  # 0 to 4095 (higher = brighter picture)
     ]]
 
     # Live preview until interrupted by Ctrl+c
@@ -696,9 +723,8 @@ def cameraTestLoop(camera):
         imgData = np.array(Image.Scale(imgData, newHeight=1050, newWidth=1430), dtype=np.uint8)
         cv2.imshow('Preview', imgData)
 
-        stop = cv2.waitKey(1)
-        if stop > 0:
-            preview = False
+        # Check abort key
+        preview = not System.Abort()
 
     # Retrieve images
     for iteration in range(0, len(testSettings[0])):
@@ -709,34 +735,37 @@ def cameraTestLoop(camera):
 
     # Save images
     for iteration in range(0, len(imgsIn)):
-        name = str(imgLabel) + '_exp' + str(testSettings[0][iteration]) + \
-               '_gain' + str(testSettings[1][iteration]) + '_bgain' + str(testSettings[2][iteration]) +\
+        name = str(Files.config("QuickSettings")["ImageTestLabel"]) + '_exp' + str(testSettings[0][iteration]) + \
+               '_gain' + str(testSettings[1][iteration]) + '_bgain' + str(testSettings[2][iteration]) + \
                '.png'
         cv2.imwrite(name, imgsIn[iteration], [cv2.IMWRITE_PNG_COMPRESSION, 0])
-    return False    # Abort code after running
+    return False  # Abort code after running
 
-
-IA.Start()  # start image acquisition
-run = True
-input("Press ENTER to start...")
 
 # Main code loop
+
+input("Press ENTER to start...\n")
+
+IA.Start()  # start image acquisition
+quickSettings = Files.config("QuickSettings")  # Get configuration data
+codeScanning = quickSettings["DataScanning"]  # Enable scan increases runtime significantly
+imgPlots = quickSettings["ImagePlots"]  # 0 = no plots
+compact = quickSettings["ReducedImageDetection"]  # 1 = less filters & plots
+run = True
+
 while run:
     # Start monitor timer
     Timer.Start()
 
-    #mainLoop()
-    #run = cameraTestLoop(0)
+    mainLoop()
+    # run = cameraTestLoop(0)
 
-    # Check abort key
-    key = cv2.waitKey(1)
-    if key > 0:
-        run = False
+    # Check abort key & camera conditions
+    run = not System.Abort()
 
     # End monitor timer
     deltaTime = Timer.Stop()
-    print("Refresh time: ", deltaTime, "s")
-
+    print("Refresh time: ", "{0:.3f}".format(deltaTime), "s")
 
 ################
 # System reset #

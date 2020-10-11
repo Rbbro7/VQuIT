@@ -1,32 +1,48 @@
 {
-  "Testing": {
-    "JumboPackets": 0,
-    "ImageTestLabel": "test0",
-    "QR_Scanning": 1,
+  "QuickSettings": {
+    "ImageTestLabel": "test7",
     "ImagePlots": 1,
+    "JumboPackets": 0,
+    "ActiveCameras": 6,
+    "Binning": 0,
+    "DataScanning": 0,
     "ReducedImageDetection": 1
   },
-  "Camera": {
+  "Cameras": {
     "Generic": {
+      "CTIPath": "C:\\Program Files\\MATRIX VISION\\mvIMPACT Acquire\\bin\\x64\\mvGenTLProducer.cti",
+      "Temperature": {
+        "Warning": 60,
+        "Critical": 85
+      },
       "ImageFormatControl": {
         "Resolution": {
           "Width": 4096,
           "Height": 3008
         },
         "PixelFormat": {
-          "Value": "BayerRG8",
-          "Comment": "Standard value is BayerRG12Packed, however OpenCV works with 8 bit so BayerRG8 is preferred"
+          "Value": [
+            "BayerRG8",
+            "BayerRG12Packed"
+          ],
+          "Description": "Standard value is BayerRG12Packed, however OpenCV works with 8 bit so BayerRG8 is preferred"
         },
         "BinningType": {
           "Value": [
             "Disabled",
             "Bayer4x4"
           ],
-          "Comment": "Binning can be used to reduce the amount of network traffic by compressing the images before sending them. This could be useful for a live preview, however this is not recommended if images are used for analysis"
+          "Description": "Binning can be used to reduce the amount of network traffic by compressing the images before sending them. This could be useful for a live preview, however this is not recommended if images are used for analysis"
         }
       },
       "AcquisitionControl": {
-        "ExposureMode": "TimedTriggered",
+        "ExposureMode": {
+          "Value": [
+            "TimedTriggered",
+            "Timed"
+          ],
+          "Description": "Timed leaves the timing up to the camera, TimedTriggered lets the software decide"
+        },
         "ExposureTime": 153770
       },
       "TimedTriggered_Parameters": {
@@ -38,7 +54,7 @@
           "Value": 1,
           "Description": "Number of exposures, a single frame is created by adding the exposures"
         },
-        "MultiExposureInactiveRaw": {
+        "MultiExposureInactive": {
           "Value": 250,
           "Description": "Time between the exposures that make up a single frame"
         }
@@ -46,10 +62,10 @@
       "TransportLayerControl": {
         "GevSCPSPacketSize": {
           "Value": [
-            1060,
-            8228
+            8228,
+            1060
           ],
-          "Comment": "Maximum amount of bytes per ethernet frame. A higher maximum results in better performance, but router must support Jumbo frames"
+          "Description": "Maximum amount of bytes per ethernet frame. A higher maximum results in better performance, but router must support Jumbo frames"
         }
       }
     },
@@ -89,7 +105,7 @@
       },
       {
         "Camera": "D",
-        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:40",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:40)",
         "Gain": 24,
         "BlackLevel": 64,
         "ColorCorrection": {
@@ -100,7 +116,7 @@
       },
       {
         "Camera": "E",
-        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:41))",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:41)",
         "Gain": 24,
         "BlackLevel": 64,
         "ColorCorrection": {
@@ -146,7 +162,8 @@
   },
   "Raspberry": {
     "Name": "VQuIT-RemoteIO",
-    "IP_addr": "192.168.7.239",
+    "IP_addr": "169.254.160.20",
+    "MAC_addr": "dc:a6:32:a4:c3:57",
     "GPIO_Setup": [
       {
         "Pin": 0,
