@@ -1,4 +1,4 @@
-# Adimec D12A09 python script
+# Adimec VQuIT Software (Author: Robin Broeren)
 
 
 ###########
@@ -8,13 +8,11 @@
 # GenICam helper
 from harvesters.core import Harvester
 
-# Image processing
-import cv2
-
 # Raspberry controller
 import pigpio as gpio
 
-# Data container
+# Image processing
+import cv2
 from scipy import ndimage
 import numpy as np
 
@@ -24,6 +22,9 @@ from pyzbar.pyzbar import decode as getBarcode
 
 # Read JSON files
 import json
+
+# Graphical User Interface
+# from PySide2.QtWidgets import QApplication, QLabel
 
 # Misc
 import os
@@ -48,7 +49,7 @@ class Files:
         return data
 
     @staticmethod
-    def Test():
+    def AppendDatabaseTest():
         # Append to database
         with open('VQuIT_Database.json', 'a') as database:
             data = "New Data"
@@ -56,6 +57,16 @@ class Files:
 
 
 Files = Files()
+
+
+# class UserInterface:
+#     app = QApplication(sys.argv)
+#     label = QLabel("Hello World!")
+#     label.show()
+#     app.exec_()
+#
+#
+# UI = UserInterface()
 
 
 # System settings
@@ -172,7 +183,7 @@ class ImageAcquirer:
             self.harvester.update()
             foundDevices = len(self.harvester.device_info_list)
             print('Scanning for available cameras... ' + str(foundDevices) + " of " + str(
-                self.n_camera) + " (Attempt " + str(i) + " of " + str(tries) + ")", end='\r')
+                self.n_camera) + " (Attempt " + str(i + 1) + " of " + str(tries) + ")", end='\r')
             if foundDevices >= self.n_camera:
                 break
             time.sleep(1)
@@ -244,11 +255,11 @@ class ImageAcquirer:
 
             # AcquisitionControl
             self.GigE[i].remote_device.node_map.ExposureMode.value = acquisition["ExposureMode"]["Value"][0]
-            self.GigE[i].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]
+            self.GigE[i].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]["Value"]
 
             # AnalogControl
-            self.GigE[i].remote_device.node_map.GainRaw.value = cameraInfo[i]["Gain"]
-            self.GigE[i].remote_device.node_map.BlackLevelRaw.value = cameraInfo[i]["BlackLevel"]
+            self.GigE[i].remote_device.node_map.GainRaw.value = cameraInfo[i]["Gain"]["Value"]
+            self.GigE[i].remote_device.node_map.BlackLevelRaw.value = cameraInfo[i]["BlackLevel"]["Value"]
 
             # TransportLayerControl   
             self.GigE[i].remote_device.node_map.GevSCPSPacketSize.value = packetSize  # Stock: 1060 | recommended 8228
@@ -643,7 +654,6 @@ class OpenCV:
 
 CV = OpenCV()
 
-
 #########
 # Setup #
 #########
@@ -656,6 +666,12 @@ IA.Config()  # configure image acquirer objects
 IO.Setup()  # run setup for raspberry pi
 
 System.ConfigScaling(IA.GigE[0])  # configure scaling based on monitors
+
+# Init other variables used in main loop
+quickSettings = Files.config("QuickSettings")  # Get configuration data
+codeScanning = quickSettings["DataScanning"]  # Enable scan increases runtime significantly
+imgPlots = quickSettings["ImagePlots"]  # 0 = no plots
+compact = quickSettings["ReducedImageDetection"]  # 1 = less filters & plots
 
 
 #############
@@ -708,11 +724,10 @@ def cameraTestLoop(camera):
 
     testSettings = [[  # Exposure (Time during which the sensor is exposed to light)
         80000, 85000, 90000, 102000  # Microseconds (Datasheet {min: 40 µs, max: acq - 226µs}, Software {min:15})
-    ], [  # Gain (more gain = more noise) Analog gain: 0->24dB Digital gain: 24->48dB
-        5, 5, 5, 5  # 1 = 0.1 dB
-    ], [
-        # Black level - Prevent clipping of the minimum value above 0 (Used to bring the minimum values closer to 0 if they are shifted up by gain)
-        0, 0, 0, 0  # 0 to 4095 (higher = brighter picture)
+    ], [  # Gain
+        5, 5, 5, 5
+    ], [  # Black level
+        0, 0, 0, 0
     ]]
 
     # Live preview until interrupted by Ctrl+c
@@ -743,16 +758,10 @@ def cameraTestLoop(camera):
 
 
 # Main code loop
-
 input("Press ENTER to start...\n")
 
 IA.Start()  # start image acquisition
-quickSettings = Files.config("QuickSettings")  # Get configuration data
-codeScanning = quickSettings["DataScanning"]  # Enable scan increases runtime significantly
-imgPlots = quickSettings["ImagePlots"]  # 0 = no plots
-compact = quickSettings["ReducedImageDetection"]  # 1 = less filters & plots
 run = True
-
 while run:
     # Start monitor timer
     Timer.Start()
