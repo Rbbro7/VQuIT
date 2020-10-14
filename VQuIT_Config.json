@@ -1,11 +1,11 @@
 {
   "QuickSettings": {
     "ImageTestLabel": "test7",
-    "ImagePlots": 0,
+    "ImagePlots": 1,
     "JumboPackets": 1,
-    "ActiveCameras": 6,
+    "ActiveCameras": 1,
+    "DataScanning": 1,
     "Binning": 0,
-    "DataScanning": 0,
     "ReducedImageDetection": 1
   },
   "Cameras": {
@@ -74,8 +74,8 @@
     },
     "Advanced": [
       {
-        "Camera": "A",
-        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",
+        "Camera": "H",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:46)",
         "Gain": {
           "Value": 240,
           "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"

@@ -678,13 +678,14 @@ compact = quickSettings["ReducedImageDetection"]  # 1 = less filters & plots
 # Main loop #
 #############
 
+
 # Normal loop
 def mainLoop():
     # Request camera frames
     imgsIn = []
     for iteration in range(0, len(IA.GigE)):
         print("Camera " + str(iteration) + ": ", end='\r')
-        IA.camConfig(iteration, exposure=90000, gain=5, blackLevel=0)
+        #IA.camConfig(iteration, exposure=90000, gain=5, blackLevel=0)
         imgData = IA.RequestFrame(iteration)
         imgsIn.append(imgData)
 
