@@ -1,23 +1,24 @@
 # Timer class
 class Timer:
     time = None
-    __tic = None  # Start time
-    __toc = None  # Stop time
+    tic = None  # Start time
+    toc = None  # Stop time
 
-    def Setup(self):
-        print("Importing time")
-        import time
-        self.time = time
+    def ImportTime(self):
+        if self.time is None:
+            print("Importing time")
+            import time
+            self.time = time
+        return self.time
 
     # Start timer
     def Start(self):
-        # Import time module if not available
-        if self.time is None:
-            self.Setup()
-        self.__tic = self.time.perf_counter()
+        time = self.ImportTime()
+        self.tic = time.perf_counter()
 
     # Stop timer
     def Stop(self):
-        self.__toc = self.time.perf_counter()
-        result = self.__toc - self.__tic
+        time = self.ImportTime()
+        self.toc = time.perf_counter()
+        result = (self.toc - self.tic)
         return result

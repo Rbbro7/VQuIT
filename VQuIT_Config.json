@@ -3,7 +3,7 @@
     "ImageTestLabel": "test7",
     "ImagePlots": 1,
     "JumboPackets": 1,
-    "ActiveCameras": 1,
+    "ActiveCameras": 6,
     "DataScanning": 1,
     "Binning": 0,
     "ReducedImageDetection": 1
@@ -11,6 +11,11 @@
   "Cameras": {
     "Generic": {
       "CTIPath": "C:\\Program Files\\MATRIX VISION\\mvIMPACT Acquire\\bin\\x64\\mvGenTLProducer.cti",
+      "FetchError": {
+        "Timeout": 0.9,
+        "SoftReboot": 5,
+        "Abort": 7
+      },
       "Temperature": {
         "Warning": 60,
         "Critical": 85
@@ -215,6 +220,11 @@
     "Name": "VQuIT-RemoteIO",
     "IP_addr": "169.254.160.20",
     "MAC_addr": "dc:a6:32:a4:c3:57",
+    "SSH": {
+      "Port": 22,
+      "User": "pi",
+      "Pass": "VQuIT"
+    },
     "GPIO_Setup": [
       {
         "Pin": 0,
@@ -229,6 +239,7 @@
     ]
   },
   "ImageProcessing": {
+    "HelperTimeout": 20,
     "Sobel": {
       "ksize": {
         "Value": 25,

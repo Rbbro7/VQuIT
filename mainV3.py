@@ -1,5 +1,10 @@
 # Adimec VQuIT Software (Author: Robin Broeren)
 
+# Print whenever a process is created
+if __name__ is '__main__':
+    print("Main process created")
+else:
+    print("Helper created")
 
 #################
 # ALL PROCESSES #
@@ -8,44 +13,65 @@
 # ALL PROCESSES #
 #################
 
-
-if __name__ is not '__main__':
-    print("Subprocess created")
-
-#################
-# ALL PROCESSES #
-#################
-#################
-# ALL PROCESSES #
-#################
-
-from vquit import Image, ProductData, OpenCV
+from vquit import Image, ProductData, OpenCV, Timer
 
 Image_SUB = Image()
 ProductData_SUB = ProductData()
 CV_SUB = OpenCV()
+Timer_SUB = Timer()
 
 
-def imageProcessing(iteration, image, ccValues):
-    if image is not 0:
-        # Preprocessing
-        cc = Image_SUB.NoiseReduction(Image_SUB.ColorCorrection(image, ccValues))
-        gray = Image_SUB.Gray(cc)
-        grayBlur = Image_SUB.Blur(gray)
+# Image processing function run on children
+def imageProcessing(timeout, imagesIn, imagesOut, imagesInLock, imagesOutLock, terminate, terminateLock, parameters):
+    # Extract parameters
+    [ccValues] = parameters
 
-        # Get product data
-        [acode, sn] = ProductData_SUB.GetDataMatrixInfo(grayBlur)
-        if acode is not False:
-            print("Camera ", iteration, " : Acode", acode, "& S/N", sn)
+    # Start idle timer
+    Timer_SUB.Start()
 
-        # Perform image analysis
-        output = CV_SUB.EdgeDetection(grayBlur)
-        output = cc
+    # Loop this process until abort is called
+    while True:
+        # Reset image
+        image = None
 
-        # queue.put([cc, grayBlur])
-        return [iteration, output]
-    else:
-        return [iteration, False]
+        # Check for new image
+        with imagesInLock:
+            if imagesIn.empty() is False:
+                [dataID, image] = imagesIn.get()
+
+        # Process new image if found
+        if image is not None:
+            # Preprocessing
+            cc = Image_SUB.NoiseReduction(Image_SUB.ColorCorrection(image, ccValues[dataID]))
+            gray = Image_SUB.Gray(cc)
+            grayBlur = Image_SUB.Blur(gray)
+
+            # Get product data
+            # [acode, sn] = ProductData_SUB.GetDataMatrixInfo(grayBlur)
+            # if acode is not False:
+            #     print("Camera ", dataID, " : Acode", acode, "& S/N", sn)
+
+            # Perform image analysis
+            outputImage = CV_SUB.EdgeDetection(grayBlur)
+
+            # Send processed image to parent
+            with imagesOutLock:
+                imagesOut.put([dataID, outputImage])
+
+            # Reset idle timer
+            Timer_SUB.Start()
+
+        # Terminate child if idle time too long
+        idleTime = Timer_SUB.Stop()
+        if idleTime > timeout:
+            print("Terminating child... (timeout reached)")
+            return
+
+        # Check for termination call
+        with terminateLock:
+            if terminate.value is True:
+                print("Terminating child...")
+                return
 
 
 # Everything outside this if statement will run for every process due to the lack of fork() when creating child processes in Windows
@@ -63,10 +89,6 @@ if __name__ == '__main__':
 
     # Import custom packages
     import vquit
-
-    # Multiprocessing
-    from multiprocessing import Process  # , Queue
-    import concurrent.futures as futures
 
     # Image processing
     import cv2
@@ -137,24 +159,25 @@ if __name__ == '__main__':
             return "\n\nWarning: " + str(msg) + '\n\n'
 
 
-    # Start classes from custom package
-    Config = vquit.Configuration()
-    ProductData = vquit.ProductData()
-    FetchTimer = vquit.Timer()
-    FXTimer = vquit.Timer()
-    IA = vquit.ImageAcquirer()
-    IO = vquit.RaspberryPi()
-    Image = vquit.Image()
-    CV = vquit.OpenCV()
-    System = System()
+    System = System()  # General system settings
     warnings.formatwarning = vquit.WarningFormat.SetCustom  # Set custom warning format
 
-    #########
-    # Setup #
-    #########
+    # Start classes from custom package
+    Config = vquit.Configuration()  # Extracts data from config file
+    ProductData = vquit.ProductData()  # Used to extract product data from images
+    IA = vquit.ImageAcquirer(Config_module=Config, Warnings_module=warnings)  # Used to retrieve data from the cameras
+    IO = vquit.RaspberryPi(Config_module=Config)  # Communicate with Raspberry Pi over ethernet
+    Image = vquit.Image()  # Used for image processing
+    CV = vquit.OpenCV()  # Uses OpenCV to analyze images
+    Helpers = vquit.Helpers(Config_module=Config)  # Used to create parallel processes that help with image processing
 
-    IA.Setup(Config_module=Config, Warnings_module=warnings)  # Run setup for cameras
-    IO.Setup(Config_module=Config)  # Run setup for raspberry
+    # Timers to keep track of execution durations
+    FetchTimer = vquit.Timer()
+    FXTimer = vquit.Timer()
+
+    #########
+    # SETUP #
+    #########
 
     System.ConfigScaling(IA.GigE[0])  # configure scaling based on monitors
 
@@ -162,10 +185,6 @@ if __name__ == '__main__':
     quickSettings = Config.Get("QuickSettings")  # Get configuration data
     imgPlots = quickSettings["ImagePlots"]  # 0 = no plots
     compact = quickSettings["ReducedImageDetection"]  # 1 = less filters & plots
-
-    #############
-    # Main loop #
-    #############
 
     # Color correction values
     ccTable = []
@@ -175,79 +194,46 @@ if __name__ == '__main__':
                         ccData[i]["ColorCorrection"]["Green"],
                         ccData[i]["ColorCorrection"]["Blue"]])
 
-
-    def serialFX(fetchedImages):
-        output = [
-            imageProcessing(iteration, fetchedImages[iteration], ccTable[iteration]) for iteration in
-            range(0, len(fetchedImages))]
-
-        return output
-
-
-    def concurrentFX(mode, fetchedImages):
-        output = []
-        if mode is "Threads":
-            concurrentExecutor = futures.ThreadPoolExecutor()
-        elif mode is "Processes":
-            concurrentExecutor = futures.ProcessPoolExecutor()
-        else:
-            print("Enter valid concurrent mode")
-            return output
-
-        with concurrentExecutor as executor:
-            results = [executor.submit(imageProcessing, iteration, fetchedImages[iteration], ccTable[iteration]) for
-                       iteration in range(0, len(fetchedImages))]
-
-            # Read result of finished tasks
-            for f in futures.as_completed(results):
-                output.append(f.result())
-        return output
-
-
-    # Normal loop
-    def mainLoop():
-        # image = IA.RequestFrame(0)
-        # print(np.max(image))
-
-        # Request frame from all connected cameras ans store them in imgsIn
-        FetchTimer.Start()
-        fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
-        print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
-
-        # out = concurrentFX("Threads", fetchedImages)  # ThreadPoolExecutor 3.5 - ProcessPoolExecutor: 4.3
-        out = serialFX(fetchedImages)  # 4.5
-
-        # showImage = out[0][1]
-        # showName = str(out[0][0])
-        #
-        # showImage = Image.Scale(showImage, newHeight=400, newWidth=400)
-        #
-        # try:
-        #     if showImage is not False:
-        #         cv2.imshow(showName, showImage)
-        # except:
-        #     pass
-
+    # Create helper processes to offload parent process
+    Helpers.Create(imageProcessing, [ccTable], len(IA.GigE))  # Create a helper for each camera
 
     # Main code loop trigger
     input("Press ENTER to start...\n")
 
     IA.Start()  # Start image acquisition
+    Helpers.Start()  # Start helper processes
     run = True
     while run:
-        # Run main loop
+        ###################
+        # START MAIN LOOP #
+        ###################
+
+        Helpers.Lock()
+        # Request frame from all connected cameras ans store them in imgsIn
         FetchTimer.Start()
         fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
         print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
+        # Send data to helpers
+        Helpers.Unlock()
         FXTimer.Start()
-        out = serialFX(fetchedImages)  # 4.5
-        # out = concurrentFX("Threads", fetchedImages)  # ThreadPoolExecutor 3.5 - ProcessPoolExecutor: 4.3
+        Helpers.SendImages(fetchedImages)
+
+        # Retrieve data from helpers
+        processedImages = Helpers.GetData()
         print("Process time: ", "{0:.3f}".format(FXTimer.Stop()), "s")
 
-        print(out[0][1])
-        # CV.SaveAsPNG("V2 Threads", out[0][1])
-        exit()
+        # Show result of first image
+        try:
+            showImage = Image.Scale(processedImages[0], newHeight=301, newWidth=410)
+            cv2.imshow("Test", showImage)
+        except:
+            print("Could not preview image")
+            pass
+
+        #################
+        # END MAIN LOOP #
+        #################
 
         # Check abort parameters
         run = not System.Abort()
@@ -256,11 +242,19 @@ if __name__ == '__main__':
     # System reset #
     ################
 
+    # Terminate image acquirers
     IA.Stop()
     IA.Destroy()
     IA.Reset()
 
-    exit()
+    # Disconnect Raspberry
+    IO.Disconnect()
+
+    # Terminate Helpers
+    if Helpers.Terminated() is True:
+        # Exit script
+        exit()
+
 else:
     ##########################
     # CHILD PROCESSES ONLY!! #

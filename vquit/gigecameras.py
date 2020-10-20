@@ -1,24 +1,18 @@
 # GigE Camera drivers
 class ImageAcquirer:
-    # Harvester object
-    harvester = None
 
     # Storage for camera modules
     GigE = []
-    n_camera = None
 
-    # Temperature
-    criticalTemp = None
-    warningTemp = None
+    # Maximum fetch tries until reconnect and abort
+    fetchTimeout = None
+    fetchSoftReboot = None
+    fetchAbort = None
 
-    sleep = None
-    warnings = None
-    sys = None
+    cv2 = None
 
-    FileConfig = None
-    WarningFormat = None
-
-    def Setup(self, Config_module=None, Warnings_module=None):
+    # Function runs when initializing class
+    def __init__(self, Config_module=None, Warnings_module=None):
 
         # Misc
         from time import sleep
@@ -32,10 +26,11 @@ class ImageAcquirer:
         self.FileConfig = Config_module
 
         # GenICam helper
-        from harvesters.core import Harvester
+        from harvesters.core import Harvester, TimeoutException
 
         # Init harvester
         self.harvester = Harvester()
+        self.TimeoutException = TimeoutException
 
         # Temperature
         self.criticalTemp = self.FileConfig.Get("Cameras")["Generic"]["Temperature"]["Critical"]
@@ -49,6 +44,8 @@ class ImageAcquirer:
         self.Create()  # define image Acquirer objects from discovered devices
         self.Config()  # configure image acquirer objects
 
+        self.ImportOpenCV()  # Create opencv module
+
     # Import cti file from GenTL producer
     def ImportCTI(self):
         # path to GenTL producer
@@ -61,6 +58,13 @@ class ImageAcquirer:
             print(
                 "\nCould not find the GenTL producer for GigE\nCheck the file path given in VQuIT_config.json>Cameras>Generic>CTIPath")
             self.sys.exit(1)
+
+    def ImportOpenCV(self):
+        if self.cv2 is None:
+            print("Importing OpenCV")
+            import cv2
+            self.cv2 = cv2
+        return self.cv2
 
     # Scan for available producers
     def Scan(self):
@@ -104,6 +108,12 @@ class ImageAcquirer:
         acquisition = c["Generic"]["AcquisitionControl"]
         transport = c["Generic"]["TransportLayerControl"]
         trigger = c["Generic"]["TimedTriggered_Parameters"]
+        fetchError = c["Generic"]["FetchError"]
+
+        # Maximum fetch tries per camera
+        self.fetchTimeout = fetchError["Timeout"]
+        self.fetchSoftReboot = fetchError["SoftReboot"]
+        self.fetchAbort = fetchError["Abort"]
 
         # Jumbo packets
         jumboPackets = qs["JumboPackets"]
@@ -184,28 +194,50 @@ class ImageAcquirer:
 
     # Retrieve camera data
     def RequestFrame(self, camNr):
-        im = 0
-        loop = 0
+        cv2 = self.ImportOpenCV()
+
         # Loop process until successful
-        while True:
+        loop = 0
+        fetchImage = True
+        while fetchImage:
             loop += 1
             try:
-                self.GigE[camNr].remote_device.node_map.TriggerSoftware.execute()  # Trigger camera
+                if loop > 1 and (loop % 2) is not 0:
+                    # Wait before sending new trigger every odd try that is not the first
+                    self.sleep(0.5)
+                # Trigger camera
+                self.GigE[camNr].remote_device.node_map.TriggerSoftware.execute()
 
-                # get a buffer
+                # Wait for buffer until timeout
                 print("Camera " + str(camNr) + ": Fetch buffer (try " + str(loop) + ")...", end='\r')
-                with self.GigE[camNr].fetch_buffer() as buffer:
+                with self.GigE[camNr].fetch_buffer(timeout=self.fetchTimeout) as buffer:
                     print("Camera " + str(camNr) + ": Fetched (try " + str(loop) + ")", end='\r')
                     # access the image payload
                     component = buffer.payload.components[0]
 
                     if component is not None:
-                        im = component.data.reshape(component.height, component.width)
+                        image = component.data.reshape(component.height, component.width)
+                        # BayerRG -> RGB (Does not work proper when scaled down)
+                        image = cv2.cvtColor(image, cv2.COLOR_BayerRG2RGB)
+                        return image
+            except self.TimeoutException:
+                print("Camera " + str(camNr) + ": Fetch timeout (try " + str(loop) + ")")
+            except KeyboardInterrupt:
+                print("Camera " + str(camNr) + ": Fetch interrupted by user (try " + str(loop) + ")")
             except:
-                print("Camera " + str(camNr) + ": Fetching failed")
-                im = 0
-            break
-        return im
+                print("Camera " + str(camNr) + ": Unexpected error (try " + str(loop) + ")")
+
+            if loop >= self.fetchSoftReboot:
+                print("Camera" + str(camNr) + ": Failed...trying soft reboot (try " + str(loop) + ")")
+                self.SoftReboot()
+
+            if loop >= self.fetchAbort:
+                print("Check camera" + str(camNr) + ": Too manny tries (try " + str(loop) + " of " + str(
+                    self.fetchAbort) + ")")
+                fetchImage = False
+
+        # Something went wrong
+        return False
 
     # Get camera temperature
     def getTemperature(self, camNr):
@@ -242,3 +274,8 @@ class ImageAcquirer:
     # Reset harvester
     def Reset(self):
         self.harvester.reset()
+
+    # Soft reboot
+    def SoftReboot(self):
+        self.Stop()
+        self.Start()
