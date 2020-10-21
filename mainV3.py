@@ -22,8 +22,15 @@ Timer_SUB = Timer()
 
 
 # Image processing function run on children
-def imageProcessing(timeout, imagesIn, imagesOut, imagesInLock, imagesOutLock, terminate, terminateLock, parameters):
+def imageProcessing(communication_Vars, parameters):
     # Extract parameters
+    (timeout, guiProgressbar_Vars, imagesIn_Vars, imagesOut_Vars, terminate_Vars) = communication_Vars
+
+    (progressbarLock, progressbarValue) = guiProgressbar_Vars
+    (imagesInLock, imagesIn) = imagesIn_Vars
+    (imagesOutLock, imagesOut) = imagesOut_Vars
+    (terminateLock, terminate) = terminate_Vars
+
     [ccValues] = parameters
 
     # Start idle timer
@@ -57,6 +64,10 @@ def imageProcessing(timeout, imagesIn, imagesOut, imagesInLock, imagesOutLock, t
             # Send processed image to parent
             with imagesOutLock:
                 imagesOut.put([dataID, outputImage])
+
+            # Increment progressbar in GUI
+            with progressbarLock:
+                progressbarValue.value += 1
 
             # Reset idle timer
             Timer_SUB.Start()

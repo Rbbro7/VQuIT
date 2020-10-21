@@ -52,14 +52,14 @@ class RaspberryPi:
         with self.ssh:
             self.StopDaemon()
 
-        # Ask user whether to shutdown or disconnect the Raspberry
-        shutdownPrompt = input("Shutdown Raspberry? (y/n)")
-        if shutdownPrompt is "y":
-            with self.ssh:
-                self.ShutdownPi()
-            print("Shutdown Raspberry successfully")
-        else:
-            print("Disconnected from Raspberry successfully")
+        # # Ask user whether to shutdown or disconnect the Raspberry
+        # shutdownPrompt = input("Shutdown Raspberry? (y/n)")
+        # if shutdownPrompt is "y":
+        #     with self.ssh:
+        #         self.ShutdownPi()
+        #     print("Shutdown Raspberry successfully")
+        # else:
+        print("Disconnected from Raspberry successfully")
 
     def PinMode(self, pin, state):
         if state is 'input':

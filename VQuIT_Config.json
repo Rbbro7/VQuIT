@@ -3,7 +3,7 @@
     "ImageTestLabel": "test7",
     "ImagePlots": 1,
     "JumboPackets": 1,
-    "ActiveCameras": 6,
+    "ActiveCameras": 3,
     "DataScanning": 1,
     "Binning": 0,
     "ReducedImageDetection": 1
@@ -239,7 +239,7 @@
     ]
   },
   "ImageProcessing": {
-    "HelperTimeout": 20,
+    "HelperTimeout": 120,
     "Sobel": {
       "ksize": {
         "Value": 25,
