@@ -8,19 +8,18 @@
 # ALL PROCESSES #
 #################
 
-from vquit import Timer
-import warnings as warnings_SUB
-from time import sleep
+from vquit import WarningFormat
+import warnings
 
-Timer = Timer()
+# Set custom warning format
+warnings.formatwarning = WarningFormat.SetCustom
 
 
 # Get images from cameras
-def mainProgram(communication_Vars):
+def mainProcess(communication_Vars):
     # Extract parameters
-    (SendImages, GetData, guiImagePreviewVars, terminate_Vars) = communication_Vars
-    (imgPreviewLock, imgPreviewQue) = guiImagePreviewVars
-    (terminateLock, terminate) = terminate_Vars
+    (SendImages, GetImages, GUI_ResetProgressbar, GUI_IncreaseProgressbar, GUI_UpdatePreviewWindow,
+     UpdateTerminationFlag, SetFinishedFlag) = communication_Vars
 
     # Import custom module to extract data from config file
     from vquit import Configuration
@@ -30,38 +29,58 @@ def mainProgram(communication_Vars):
     from vquit import RaspberryPi
     IO = RaspberryPi(Config_module=Config)  # Communicate with Raspberry Pi over ethernet
 
+    # Create timers to keep track of execution times
+    from vquit import Timer
+    FetchTimer = Timer()
+    FXTimer = Timer()
+
     # Start image acquirers
     from vquit import ImageAcquirer
-    IA = ImageAcquirer(Config_module=Config,
-                       Warnings_module=warnings_SUB)  # Used to retrieve data from the cameras
+    IA = ImageAcquirer(Config_module=Config, Warnings_module=warnings)  # Used to retrieve data from the cameras
     IA.Start()  # Start image acquisition
 
     # Loop this process until termination is called
     terminationFlag = False
+    terminationMessage = None
     while not terminationFlag:
         # Check for termination call
-        with terminateLock:
-            terminationFlag = terminate.value
+        terminationFlag = UpdateTerminationFlag()
+
+        # Check thermal status of cameras
+        if IA.thermalCondition() is "Critical":
+            terminationFlag = True
+            terminationMessage = "Critical camera temperatures"
 
         # Run normal loop
         if not terminationFlag:
+            # Reset progressbar
+            GUI_ResetProgressbar()
 
             # Fetch images
+            FetchTimer.Start()
             fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
+            print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
+
+            # Update progressbar
+            GUI_IncreaseProgressbar(20)
 
             # Send images to helpers
             SendImages(fetchedImages)
 
-            # Send image to GUI
-            with imgPreviewLock:
-                imgPreviewQue.put(fetchedImages[0])
-
             # Request processed images from helpers
-            processedImages = GetData()
+            FXTimer.Start()
+            processedImages = GetImages()
+            print("Process time: ", "{0:.3f}".format(FXTimer.Stop()), "s")
+
+            # Send image to GUI
+            GUI_UpdatePreviewWindow(processedImages[0])
 
         # Run exit code
         else:
-            print("Terminating main helper...")
+            if terminationMessage is None:
+                terminationMessage = "User abort request"
+            print("Terminating main process...(" + str(terminationMessage) + ")")
+
             # Terminate image acquirers
             IA.Stop()
             IA.Destroy()
@@ -70,9 +89,12 @@ def mainProgram(communication_Vars):
             # Disconnect Raspberry
             IO.Disconnect()
 
+            # Let other progresses know the main process is finished
+            SetFinishedFlag()
+
 
 # Image processing function run on children
-def imageProcessing(communication_Vars):
+def analysisProcess(communication_Vars):
     from vquit import Configuration, Image, ProductData, OpenCV
 
     # Extract data from config file
@@ -88,11 +110,9 @@ def imageProcessing(communication_Vars):
     CV = OpenCV()
 
     # Extract parameters
-    (timeout, guiProgressbar_Vars, imagesIn_Vars, imagesOut_Vars, terminate_Vars) = communication_Vars
-    (progressbarLock, progressbarValue) = guiProgressbar_Vars
+    (CheckTimeout, GUI_IncreaseProgressbar, imagesIn_Vars, SendProcessedData, SetIdleAnalysisHelpers,
+     UpdateTerminationFlag) = communication_Vars
     (imagesInLock, imagesIn) = imagesIn_Vars
-    (imagesOutLock, imagesOut) = imagesOut_Vars
-    (terminateLock, terminate) = terminate_Vars
 
     # Color correction values
     ccTable = []
@@ -103,21 +123,22 @@ def imageProcessing(communication_Vars):
                         ccData[i]["ColorCorrection"]["Blue"]])
 
     # Start idle timer
-    Timer.Start()
+    from vquit import Timer
+    IdleTimer = Timer()
+    IdleTimer.Start()
 
     # Loop this process until termination is called
     terminationFlag = False
     terminationMessage = None
+    SetIdleAnalysisHelpers(1)  # Increase available helpers by 1
     while not terminationFlag:
         # Check for termination call
-        with terminateLock:
-            terminationFlag = terminate.value
+        terminationFlag = UpdateTerminationFlag()
 
         # Check for timeout
-        idleTime = Timer.Stop()
-        if idleTime > timeout:
+        if CheckTimeout(IdleTimer.Stop()) is True:
             terminationFlag = True
-            terminationMessage = "(timeout reached)"
+            terminationMessage = "Timeout reached"
 
         # Run normal loop
         if not terminationFlag:
@@ -131,41 +152,54 @@ def imageProcessing(communication_Vars):
 
             # Process new image if found
             if image is not None:
+                # Decrease available helpers by 1
+                SetIdleAnalysisHelpers(-1)
+
                 # Preprocessing
-                # cc = Image.NoiseReduction(Image.ColorCorrection(image, ccTable[dataID]))
-                # gray = Image.Gray(cc)
-                # grayBlur = Image.Blur(gray)
+                cc = Image.NoiseReduction(Image.ColorCorrection(image, ccTable[dataID]))
+                gray = Image.Gray(cc)
+                grayBlur = Image.Blur(gray)
+
+                GUI_IncreaseProgressbar(5)  # Increment progressbar in GUI
 
                 # Get product data
                 # [acode, sn] = ProductData.GetDataMatrixInfo(grayBlur)
                 # if acode is not False:
                 #     print("Camera ", dataID, " : Acode", acode, "& S/N", sn)
-                sleep(5)
+
                 # Perform image analysis
-                # outputImage = CV.EdgeDetection(grayBlur)
-                outputImage = image
+                analyzedImage = CV.EdgeDetection(grayBlur)
+
+                GUI_IncreaseProgressbar(5)  # Increment progressbar in GUI
+
+                # Convert result to RGB
+                outputImage = Image.GraytoRGB(analyzedImage)
 
                 # Send processed image to parent
-                with imagesOutLock:
-                    imagesOut.put([dataID, outputImage])
+                SendProcessedData(dataID, outputImage)
 
-                # Increment progressbar in GUI
-                with progressbarLock:
-                    progressbarValue.value += 10
+                GUI_IncreaseProgressbar(5)  # Increment progressbar in GUI
 
                 # Reset idle timer
-                Timer.Start()
+                IdleTimer.Start()
+
+                # Increase available helpers by 1
+                SetIdleAnalysisHelpers(1)
 
         # Run exit code
         else:
+            # Decrease available helpers by 1
+            SetIdleAnalysisHelpers(-1)
+
             if terminationMessage is None:
-                terminationMessage = "(user abort request)"
-            print("Terminating child..." + str(terminationMessage))
+                terminationMessage = "Main process finished"
+            print("Terminating child...(" + str(terminationMessage + ")"))
 
 
 # Everything outside this if statement will run for every process due to the lack of fork() when creating child processes in Windows
 if __name__ == '__main__':
     print("Main process created")
+    print("\nStarting VQuIT Software", end='\r')
 
     #######################
     # MAIN PROCESS ONLY!! #
@@ -174,68 +208,21 @@ if __name__ == '__main__':
     # MAIN PROCESS ONLY!! #
     #######################
 
-    ###########
-    # Imports #
-    ###########
-
-    # Import user interface module
+    # Import GUI module
     from PyQt5.QtWidgets import QApplication
 
     # Import custom packages
-    import vquit
+    from vquit import Application, Helpers
 
     # Misc
     import sys
-    import warnings
-
-
-    ###########
-    # Classes #
-    ###########
-
-    # System settings
-    class System:
-        # Start software
-        print("\nStarting VQuIT Software", end='\r')
-
-        print("WARNING thermalCondition check does not work now")
-
-        # Check abort key & camera conditions
-        # @staticmethod
-        # def Abort():
-        #     if IA.thermalCondition() is "Critical":
-        #     # return True
-        #     return False
-
-        # Change formatting of warnings
-        @staticmethod
-        def CustomFormatWarning(msg, *args, **kwargs):
-            # ignore everything except the message
-            return "\n\nWarning: " + str(msg) + '\n\n'
-
-
-    System = System()  # General system settings
-    warnings.formatwarning = vquit.WarningFormat.SetCustom  # Set custom warning format
 
     # Start helper class instance
-    Helpers = vquit.Helpers()  # Used to create parallel processes that help with image processing
+    Helpers = Helpers(mainProcess, analysisProcess)
 
     # Init user interface packages
     APP = QApplication(sys.argv)  # Pass commandline parameters to app
-    progressbar, imagePreview = Helpers.GetGUI_Vars()
-    GUI = vquit.Application(progressbar, imagePreview, Helpers.Start, Helpers.Terminated)
-
-    # Timers to keep track of execution durations
-    FetchTimer = vquit.Timer()
-    FXTimer = vquit.Timer()
-
-    #########
-    # SETUP #
-    #########
-
-    # Create helper processes
-    Helpers.CreateMain(mainProgram)  # Create main process
-    Helpers.CreateProcessor(imageProcessing)  # Create a process for each camera
+    GUI = Application(Helpers.GUI_GetVars(), Helpers.Start, Helpers.Terminated)
 
     # Show GUI window
     GUI.show()
@@ -244,4 +231,4 @@ if __name__ == '__main__':
     sys.exit(APP.exec_())
 
 else:
-    print("Helper created")
+    print("Subprocess created")

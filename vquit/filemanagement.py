@@ -22,6 +22,23 @@ class Configuration:
 # Save product info
 class ProductData:
     getDataMatrix = None
+    json = None
+
+    def ImportJSON(self):
+        if self.json is None:
+            print("Importing JSON")
+            # Import module to read JSON files
+            import json
+            self.json = json
+        return self.json
+
+    # Return data from configuration file
+    def GetProductInfo(self, productName):
+        json = self.ImportJSON()
+
+        with open('VQuIT_Database.json', 'r') as database:
+            data = json.load(database)["ProductData"][productName]
+        return data
 
     # Import barcode scanner module
     def ImportDataMatrixDecode(self):

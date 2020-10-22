@@ -1,4 +1,14 @@
 {
+  "ProductData": {
+    "Adimec Camera 1": {
+      "Acode": 19463,
+      "Other": "Adimec 1"
+    },
+    "Adimec Camera 2": {
+      "Acode": 5234,
+      "Other": "Adimec 2"
+    }
+  },
   "ScanData": [
     {
       "ProductInfo": {

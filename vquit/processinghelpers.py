@@ -3,19 +3,28 @@ from multiprocessing import Process, Queue, Lock, Value
 
 
 class Helpers:
-    helpers = []
+    analysisHelpers = []  # Object to store all analyze helpers
+    idleAnalysisHelpers = 0  # Number of idle analysis helpers
     pendingReturns = 0
 
-    Main_Process = None  # POSSIBLY TEMPORARY
+    Main_Process = None
+
+    # Communication objects that need to be reset per run
+    idleAnalysisHelpers_Vars = None  # Check number of idle analysis helpers
+    terminate_Vars = None  # Terminate main program
+    mainProcessFinished_Vars = None  # Terminate children
 
     # Function runs when initializing class
-    def __init__(self):
+    def __init__(self, mainProcess, analysisProcess):
         # Retrieve settings from configuration file
         from vquit import Configuration
         Config_module = Configuration()
 
         self.helperTimeout = Config_module.Get("ImageProcessing")["HelperTimeout"]
         self.n_cameras = Config_module.Get("QuickSettings")["ActiveCameras"]
+
+        self.mainProcess = mainProcess  # Function which is run by analysis helpers
+        self.analysisProcess = analysisProcess  # Function which is run by analysis helpers
 
         ##################################################
         # Create objects for communication with children #
@@ -25,73 +34,158 @@ class Helpers:
         # Lock: Used for uninterruptible communication with children
 
         self.guiProgressbar_Vars = (Lock(), Value('i', 0))  # Used for communicating with GUI progressbar
-        self.guiImagePreviewVars = (Lock(), Queue())  # Used to update GUI image preview
+        self.guiPreviewWindow_Vars = (Lock(), Queue())  # Used to update GUI image preview
 
-        self.terminate_Vars = (Lock(), Value('b', False))  # Used to terminate children
-        self.imagesIn_Vars = (Lock(), Queue())  # Used for sending raw pictures to children
-        self.dataOut_Vars = (Lock(), Queue())  # Used for retrieving processed pictures from children
+        self.ResetMain()  # Set communication objects that need to be reset each run
+        self.imagesIn_Vars = (Lock(), Queue())  # Send raw pictures to children
+        self.dataOut_Vars = (Lock(), Queue())  # Retrieve processed pictures from children
+
+    ############################
+    # Graphical User Interface #
+    ############################
 
     # Return values that are used for communication between UI and processes
-    def GetGUI_Vars(self):
-        return self.guiProgressbar_Vars, self.guiImagePreviewVars
+    def GUI_GetVars(self):
+        return self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
 
-    # Create child processes to offload parent
-    def CreateProcessor(self, function):
+    # Sent new image to GUI's preview window
+    def GUI_UpdatePreviewWindow(self, image):
+        (lock, queue) = self.guiPreviewWindow_Vars
+        with lock:
+            queue.put(image)
+
+    # Increase Progressbar in GUI
+    def GUI_IncreaseProgressbar(self, increaseValue):
+        (progressbarLock, variable) = self.guiProgressbar_Vars
+        with progressbarLock:
+            variable.value += increaseValue
+
+    # Reset Progressbar in GUI to zero
+    def GUI_ResetProgressbar(self):
+        (lock, variable) = self.guiProgressbar_Vars
+        with lock:
+            variable.value = 0
+
+    ###################
+    # AnalysisHelpers #
+    ###################
+
+    # Increase (or decrease with negative number) number of idle helpers
+    def SetIdleAnalysisHelpers(self, addValue):
+        (lock, variable) = self.idleAnalysisHelpers_Vars
+        with lock:
+            variable.value += addValue
+
+    # Get number of idle helpers
+    def GetIdleAnalysisHelpers(self):
+        (lock, variable) = self.idleAnalysisHelpers_Vars
+        with lock:
+            idleHelpers = variable.value
+        return idleHelpers
+
+    # Check for idle helpers and create if not available
+    def RequestAnalysisHelper(self, n_helpers):
+        # Calculate number of new helpers to be created
+        newHelpers = n_helpers - self.GetIdleAnalysisHelpers()
+        if newHelpers > 0:
+            # Create new helpers
+            self.CreateAnalysisHelper(newHelpers)
+
+    # Create helper processes for analyzing images
+    def CreateAnalysisHelper(self, n_helpers):
         # Bind variables
         communication_Vars = (
-            self.helperTimeout, self.guiProgressbar_Vars, self.imagesIn_Vars, self.dataOut_Vars, self.terminate_Vars)
+            self.CheckTimeout, self.GUI_IncreaseProgressbar, self.imagesIn_Vars, self.SendProcessedData,
+            self.SetIdleAnalysisHelpers, self.GetFinishedFlag)
+
+        print("Creating " + str(n_helpers) + " new analysis helpers")
 
         # Create child processes
-        for _ in range(0, self.n_cameras):
-            newHelper = Process(target=function, args=(communication_Vars,))
-            self.helpers.append(newHelper)
+        for _ in range(0, n_helpers):
+            newHelper = Process(target=self.analysisProcess, args=(communication_Vars,))
+            newHelper.start()
+            self.analysisHelpers.append(newHelper)
 
-    # Start main program (called before GUI)
-    def CreateMain(self, function):
+    # Send processed image to main process
+    def SendProcessedData(self, dataID, outputImage):
+        (lock, queue) = self.dataOut_Vars
+
+        with lock:
+            queue.put([dataID, outputImage])
+
+    # Check if main process is finished
+    def GetFinishedFlag(self):
+        (lock, variable) = self.mainProcessFinished_Vars
+        with lock:
+            updatedFlag = variable.value
+        return updatedFlag
+
+    # Check analysis helpers for timeout
+    def CheckTimeout(self, idleTime):
+        if idleTime > self.helperTimeout:
+            return True
+        else:
+            return False
+
+    ################
+    # Main Process #
+    ################
+
+    # Start main program
+    def CreateMain(self):
         # Bind variables
-        communication_Vars = (self.SendImages, self.GetData, self.guiImagePreviewVars, self.terminate_Vars,)
+        communication_Vars = (
+            self.SendRawImages, self.GetProcessedData, self.GUI_ResetProgressbar, self.GUI_IncreaseProgressbar,
+            self.GUI_UpdatePreviewWindow, self.UpdateTerminationFlag, self.SetFinishedFlag)
 
         # Create process
-        self.Main_Process = Process(target=function, args=(communication_Vars,))
+        self.Main_Process = Process(target=self.mainProcess, args=(communication_Vars,))
 
-    # Prevent data transfer from helpers until unlocked
-    def Lock(self):
-        (imagesInLock, _) = self.imagesIn_Vars
-        (dataOutLock, _) = self.dataOut_Vars
-        (terminateLock, _) = self.terminate_Vars
-
-        imagesInLock.acquire()
-        dataOutLock.acquire()
-        terminateLock.acquire()
-
-    # Revert Lock function
-    def Unlock(self):
-        [imagesInLock, _] = self.imagesIn_Vars
-        [dataOutLock, _] = self.dataOut_Vars
-        [terminateLock, _] = self.terminate_Vars
-
-        imagesInLock.release()
-        dataOutLock.release()
-        terminateLock.release()
-
-    # Start child processes
+    # Start main process
     def Start(self):
+        # Reset variable that could exist from previous runs
+        self.ResetMain()
+
+        # Create main process
+        self.CreateMain()
+
         # Start main process
         self.Main_Process.start()
 
-        # Start image processors
-        for helper in self.helpers:
-            helper.start()
+    # Reset parameters if the code has been run before
+    def ResetMain(self):
+        self.idleAnalysisHelpers_Vars = (Lock(), Value('i', 0))  # Check number of idle analysis helpers
+        self.terminate_Vars = (Lock(), Value('b', False))  # Terminate main program
+        self.mainProcessFinished_Vars = (Lock(), Value('b', False))  # Terminate children
+
+    # Check for termination call on main process
+    def UpdateTerminationFlag(self):
+        (lock, variable) = self.terminate_Vars
+        with lock:
+            updatedFlag = variable.value
+        return updatedFlag
+
+    # Set finished flag
+    def SetFinishedFlag(self):
+        # Terminate subprocess
+        print("Terminating subprocess...", end='\r')
+
+        (lock, variable) = self.mainProcessFinished_Vars
+        with lock:
+            variable.value = True
 
     # Insert all images in queue to children
-    def SendImages(self, images):
-        [imagesInLock, imagesIn] = self.imagesIn_Vars
+    def SendRawImages(self, images):
+        (lock, queue) = self.imagesIn_Vars
+
+        # Request an idle helper per image
+        self.RequestAnalysisHelper(len(images))
 
         # Create data ID (used to sort asynchronous return values)
         dataID = 0
         for data in images:
-            with imagesInLock:
-                imagesIn.put([dataID, data])
+            with lock:
+                queue.put([dataID, data])
 
             # Update expected returns from children
             self.pendingReturns += 1
@@ -101,22 +195,20 @@ class Helpers:
         print("Images sent to helpers...", end='\r')
 
     # Retrieve data from children
-    def GetData(self):
-        (terminateLock, terminate) = self.terminate_Vars
-        (dataOutLock, dataOut) = self.dataOut_Vars
+    def GetProcessedData(self):
+        (lock, queue) = self.dataOut_Vars
 
         print("Waiting for helpers...", end='\r')
         returnedData = []
         # Keep looking for returned data from children until all expected returns are received or until terminate is called
-        terminationFlag = False
-        while self.pendingReturns > 0 and not terminationFlag:
+        while self.pendingReturns > 0:
             # Reset image
             newData = None
 
             # Check for new image in queue
-            with dataOutLock:
-                if dataOut.empty() is False:
-                    newData = dataOut.get()
+            with lock:
+                if queue.empty() is False:
+                    newData = queue.get()
 
             # Append result if available
             if newData is not None:
@@ -124,9 +216,6 @@ class Helpers:
 
                 # Update expected returns from children
                 self.pendingReturns -= 1
-
-            with terminateLock:
-                terminationFlag = terminate.value
 
         print("Processing incoming data from helpers...", end='\r')
 
@@ -143,32 +232,22 @@ class Helpers:
 
     # Terminate children
     def Terminated(self):
-        (terminateLock, terminate) = self.terminate_Vars
-        # Terminate children
-        print("Terminating children...", end='\r')
-        with terminateLock:
-            terminate.value = True
+        (mainLock, mainVariable) = self.terminate_Vars
+
+        # Terminate main process
+        print("Terminating main process...", end='\r')
+        with mainLock:
+            mainVariable.value = True
 
         print("Waiting on main program to be terminated...", end='\r')
-        # Prevent script from exiting before main program is finished
+        # Prevent script from exiting before main process is finished
         self.Main_Process.join()
 
-        print("Waiting on children to be terminated...", end='\r')
-        for helper in self.helpers:
+        print("Waiting on subprocess to be terminated...", end='\r')
+        # Prevent script from exiting before subVariable is finished
+        for helper in self.analysisHelpers:
             # Prevent script from exiting before children are finished
             helper.join()
 
-        print("Children properly terminated")
+        print("Processes properly terminated")
         return
-
-    # Increase Progressbar in GUI
-    def GUI_IncreaseProgressbar(self, increaseValue):
-        (progressbarLock, progressbarValue) = self.guiProgressbar_Vars
-        with progressbarLock:
-            progressbarValue.value += increaseValue
-
-    # Reset Progressbar in GUI to zero
-    def GUI_ResetProgressbar(self):
-        (progressbarLock, progressbarValue) = self.guiProgressbar_Vars
-        with progressbarLock:
-            progressbarValue.value = 0

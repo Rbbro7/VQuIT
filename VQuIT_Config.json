@@ -3,7 +3,7 @@
     "ImageTestLabel": "test7",
     "ImagePlots": 1,
     "JumboPackets": 1,
-    "ActiveCameras": 3,
+    "ActiveCameras": 6,
     "DataScanning": 1,
     "Binning": 0,
     "ReducedImageDetection": 1
@@ -49,7 +49,7 @@
           "Description": "Timed leaves the timing up to the camera\nTimedTriggered lets the software decide"
         },
         "ExposureTime": {
-          "Value": 153770,
+          "Value": 1770,
           "Description": "Time during which the sensor is exposed to light in microseconds\nDatasheet{min: 40µs, max: acq - 226µs}\nSoftware{min: 15µs}"
         }
       },

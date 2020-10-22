@@ -42,6 +42,11 @@ class Image:
         image = cv2.cvtColor(image, cv2.COLOR_BayerRG2RGB)
         return image
 
+    def GraytoRGB(self, image):
+        cv2 = self.ImportOpenCV()
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        return image
+
     # Color correction
     def ColorCorrection(self, image, ccTable):
         cv2 = self.ImportOpenCV()
