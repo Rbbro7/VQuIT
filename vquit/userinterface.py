@@ -18,11 +18,17 @@ class Application(QMainWindow):
         super(Application, self).__init__()
 
         # Extract parameters from helper object
-        guiProgressbarVars, guiImagePreviewVars = helperVariables
+        guiBatchSizeRemainingVars, guiProgressbarVars, guiImagePreviewVars = helperVariables
 
         # Create links to external functions
         self.startFunction = startFunction
         self.abortFunction = abortFunction
+
+        # Setup remaining batch checker
+        self.batchThread = RemainingBatchThread()  # Create progressbar thread
+        self.batchThread.Setup(guiBatchSizeRemainingVars)  # Set variables of thread
+        self.batchThread.remainingBatch.connect(self.SetRemainingBatch)  # Connect thread signal to class function
+        self.batchThread.start()  # Start thread
 
         # Setup progressbar
         self.thread = ProgressbarThread()  # Create progressbar thread
@@ -68,10 +74,103 @@ class Application(QMainWindow):
         self.previewWindowHeight = round(self.windowHeight * (2 / 3)) - (2 * self.previewWindowOffset)
 
         self.image = QtWidgets.QLabel(self)
+        self.image.setScaledContents(True)
         self.image.setGeometry(self.previewWindowOffset, self.previewWindowOffset, self.previewWindowWidth,
                                self.previewWindowHeight)
         self.image.setPixmap(QtGui.QPixmap("assets/previewWindow.png"))
-        self.image.setScaledContents(True)
+
+        ############
+        # TAB MENU #
+        ############
+        ####################
+        # Product Info Tab #
+        ####################
+
+        # Create widgets
+        # Product selector label
+        self.productSelectorLabel = QtWidgets.QLabel(self)
+        self.productSelectorLabel.setText("Product type: ")
+        self.productSelectorLabel.adjustSize()
+
+        # Product selector dropdown menu
+        self.productSelector = QtWidgets.QComboBox()
+        self.productSelector.setMinimumHeight(35)
+        self.productSelector.addItems(["Automatic", "Adimec Camera 1", "Adimec Camera 2"])
+        self.productSelector.currentIndexChanged.connect(self.OnChange)
+
+        # Create product selector group
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.productSelectorLabel, 0, 0)
+        layout.addWidget(self.productSelector, 0, 1)
+        layout.setColumnStretch(1, 1)  # Stretch selector
+        self.productSelectorGroup = QtWidgets.QWidget()
+        self.productSelectorGroup.setLayout(layout)
+        self.productSelectorGroup.setStyleSheet("QLabel { color: white }")
+
+        # Create widgets for info group
+        # Product info labels
+        self.acodeLabel = QtWidgets.QLabel(self)
+        self.acodeLabel.setText("Acode: retrieving from image...")
+        self.acodeLabel.adjustSize()
+
+        self.otherLabel = QtWidgets.QLabel(self)
+        self.otherLabel.setText("Other: retrieving from image...")
+        self.otherLabel.adjustSize()
+
+        # Combine widgets in layouts
+        # Add widgets to info group
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.acodeLabel, 0, 0)
+        layout.addWidget(self.otherLabel, 1, 0)
+        layout.setRowStretch(2, 1)  # Makes sure content is aligned to top
+        self.productInfoGroup = QtWidgets.QGroupBox("Product info")
+        self.productInfoGroup.setLayout(layout)
+        self.productInfoGroup.setStyleSheet("color: white")
+
+        # Combine drop down menu and info group
+        layout = QtWidgets.QGridLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.addWidget(self.productSelectorGroup, 0, 0)
+        layout.addWidget(self.productInfoGroup, 1, 0)
+        layout.setRowMinimumHeight(0, 70)
+        self.productInfoTab = QtWidgets.QWidget()
+        self.productInfoTab.setLayout(layout)
+
+        #################################################################
+
+        self.tabMenuOffset = 20
+        self.tabMenuX = self.previewWindowWidth + self.tabMenuOffset + 20
+        self.tabMenuHeight = self.previewWindowHeight - self.tabMenuOffset
+        self.tabMenuWidth = self.windowWidth - self.previewWindowWidth - (self.tabMenuOffset * 2) - 20
+
+        self.tabMenu = QtWidgets.QTabWidget(self)
+
+        self.tabMenu.addTab(self.productInfoTab, "Product")
+        self.tabMenu.addTab(QtWidgets.QLabel("Coming soon"), "Advanced settings")
+        self.productInfoTab.setObjectName("tab1")
+
+        self.tabMenu.setStyleSheet("QWidget#tab1 { background-color: #4f4f4f };")
+        self.tabMenu.setGeometry(self.tabMenuX, self.tabMenuOffset, self.tabMenuWidth, self.tabMenuHeight)
+        self.tabMenu.setAutoFillBackground(True)
+
+        # layout = QtWidgets.QGridLayout()
+        # layout.setContentsMargins(5, 5, 5, 5)
+        #
+        # layout.setColumnMinimumWidth(1, 200)
+        # layout.setRowMinimumHeight(0, 500)
+        # layout.setColumnStretch(0, 1)
+        # layout.setRowStretch(0, 1)
+        #
+        # layout.addWidget(self.image, 0, 0)
+        # layout.addWidget(self.tabMenu, 0, 1)
+        #
+        # self.mainLayout = QtWidgets.QWidget(self)
+        # self.mainLayout.setLayout(layout)
+        #
+        # self.image.setPixmap(QtGui.QPixmap("assets/previewWindow.png"))
+        # self.image.setScaledContents(True)
+
+        #################################################################
 
         # Progressbar
         self.progressbarX = 20
@@ -87,9 +186,11 @@ class Application(QMainWindow):
 
         # Slider
         self.sliderY = self.progressbarY + self.progressbarX + self.progressbarHeight
+        self.sliderWidth = (self.progressbarWidth - self.progressbarX)
+
         self.slider = QtWidgets.QSlider(self)
         self.slider.setOrientation(Qt.Horizontal)
-        self.slider.setGeometry(self.progressbarX, self.sliderY, (self.progressbarWidth - self.progressbarX),
+        self.slider.setGeometry(self.progressbarX, self.sliderY, self.sliderWidth,
                                 self.progressbarHeight)
         self.slider.setMinimum(1)
         self.slider.setMaximum(32)
@@ -97,6 +198,16 @@ class Application(QMainWindow):
         self.slider.setTickPosition(QtWidgets.QSlider.TicksBothSides)
         self.slider.setTickInterval(1)
         self.slider.setSingleStep(1)
+
+        self.slider.valueChanged.connect(self.OnSliderChange)
+
+        # Slider label
+        self.sliderLabelX = self.progressbarWidth + 20
+        self.sliderLabelY = self.sliderY
+        self.sliderLabel = QtWidgets.QLabel(self)
+        self.sliderLabel.move(self.sliderLabelX, self.sliderLabelY)
+        self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
+        self.sliderLabel.adjustSize()
 
         # Execution button
         self.executionButtonHeight = 40
@@ -110,44 +221,27 @@ class Application(QMainWindow):
         self.executionButton.setText("Start Program")
         self.executionButton.clicked.connect(self.OnClick)
 
-        # Menu Tabs
-        label1 = QtWidgets.QLabel("TAB 1")
-        label2 = QtWidgets.QLabel("TAB 2")
+        # mainLayout = QtWidgets.QGridLayout()
+        # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
+        # mainLayout.addWidget(self.topLeftGroupBox, 0, 1)  # R1 C2
+        # mainLayout.setRowStretch(0, 1)
+        # # mainLayout.setRowStretch(2, 1)
+        # # mainLayout.setColumnStretch(0, 1)
+        # # mainLayout.setColumnStretch(1, 1)
+        # self.setLayout(mainLayout)
 
-        self.tabMenuOffset = 20
-        self.tabMenuX = self.previewWindowWidth + self.tabMenuOffset + 20
-        self.tabMenuHeight = self.previewWindowHeight - self.tabMenuOffset
-        self.tabMenuWidth = self.windowWidth - self.previewWindowWidth - (self.tabMenuOffset * 2) - 20
-
-        self.tabMenu = QtWidgets.QTabWidget(self)
-        self.tabMenu.setGeometry(self.tabMenuX, self.tabMenuOffset, self.tabMenuWidth, self.tabMenuHeight)
-        self.tabMenu.addTab(label1, "Product info")
-        self.tabMenu.addTab(label2, "Advanced settings")
-
-        self.tabMenu.setAutoFillBackground(True)
         self.setPalette(self.palette)
-
-        # Dropdown menu
-        self.productSelector = QtWidgets.QComboBox(self)
-        self.productSelector.setGeometry(950, 100, 200, 35)
-        self.productSelector.addItems(["Automatic", "Adimec Camera 1", "Adimec Camera 2"])
-        self.productSelector.currentIndexChanged.connect(self.OnChange)
-
-        # Product info labels
-        self.acodeLabel = QtWidgets.QLabel(self)
-        self.acodeLabel.move(1200, (self.progressbarY + 20))
-        self.acodeLabel.setText("Acode: retrieving from image...")
-        self.acodeLabel.adjustSize()
-
-        self.otherLabel = QtWidgets.QLabel(self)
-        self.otherLabel.move(1200, (self.progressbarY + 50))
-        self.otherLabel.setText("Other: retrieving from image...")
-        self.otherLabel.adjustSize()
-
         self.show()
 
-        # Set value of progressbar
+    # Set slider based on remaining batch
+    def SetRemainingBatch(self, value):
+        if value > 0:
+            self.slider.setValue(value)
+        else:
+            # Update GUI
+            self.GUI_Idle()
 
+    # Set value of progressbar
     def SetProgressbar(self, value):
         self.progressbar.setValue(value)
 
@@ -155,25 +249,58 @@ class Application(QMainWindow):
     def UpdateImagePreview(self, value):
         self.image.setPixmap(QtGui.QPixmap(value))
 
+    # Enable or disable GUI settings
+    def EnableSettings(self, value):
+        self.productSelector.setEnabled(value)
+        self.slider.setEnabled(value)
+
+    Processing = False
+    def GUI_Active(self):
+        self.Processing = True
+
+        # Update slider text
+        self.sliderLabel.setText("Remaining batch: " + str(self.slider.value()))
+        self.sliderLabel.adjustSize()
+
+        # Set button text
+        self.executionButton.setText("Stop Program")
+
+        # Disable settings
+        self.EnableSettings(False)
+
+    def GUI_Idle(self):
+        self.Processing = False
+
+        # Update slider text
+        self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
+        self.sliderLabel.adjustSize()
+
+        # Set button text
+        self.executionButton.setText("Start Program")
+
+        # Enable settings
+        self.EnableSettings(True)
+
     # Execute when pressing button
     def OnClick(self):
         # Get text from execution button
         buttonText = self.executionButton.text()
 
-        print(buttonText)
-
         # Determine action based on buttonText
         if buttonText == "Start Program":
-            self.startFunction()
-            newButtonText = "Stop Program"
-        elif buttonText == "Stop Program":
-            self.abortFunction()
-            newButtonText = "Start Program"
-        else:
-            newButtonText = "Something weird happened"
+            # Start program
+            self.startFunction(self.slider.value())
 
-        # Set new button text
-        self.executionButton.setText(newButtonText)
+            # Update GUI
+            self.GUI_Active()
+        elif buttonText == "Stop Program":
+            # Stop program
+            self.abortFunction()
+
+            # Update GUI
+            self.GUI_Idle()
+        else:
+            print("Something weird happened in the GUI")
 
     # Execute when Dropdown menu has changed
     def OnChange(self):
@@ -196,6 +323,42 @@ class Application(QMainWindow):
         # Update label size
         self.acodeLabel.adjustSize()
         self.otherLabel.adjustSize()
+
+    # Execute when slider changes
+    def OnSliderChange(self, value):
+        if self.Processing is True:
+            labelText = "Remaining batch: "
+        else:
+            labelText = "Batch size: "
+
+        self.sliderLabel.setText(labelText + str(value))
+        self.sliderLabel.adjustSize()
+
+
+# Get remaining batch
+class RemainingBatchThread(QThread):
+    batchLock = None
+    batchValue = None
+
+    # Pass values for communication with multiprocessing
+    def Setup(self, guiBatchSizeRemainingVars):
+        # Store multiprocessing value & lock objects
+        [self.batchLock, self.batchValue] = guiBatchSizeRemainingVars
+
+    # Set signal that transports integers
+    remainingBatch = pyqtSignal(int)
+
+    # Executes when calling self.start()
+    def run(self):
+        # Keep looping
+        while True:
+            # Get current value
+            with self.batchLock:
+                remaining = self.batchValue.value
+
+            # Send value to gui
+            self.remainingBatch.emit(remaining)
+            sleep(0.1)
 
 
 class ProgressbarThread(QThread):

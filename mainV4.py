@@ -16,9 +16,10 @@ warnings.formatwarning = WarningFormat.SetCustom
 
 
 # Get images from cameras
-def mainProcess(communication_Vars):
+def mainProcess(batchSize, communication_Vars):
     # Extract parameters
-    (SendImages, GetImages, GUI_ResetProgressbar, GUI_IncreaseProgressbar, GUI_UpdatePreviewWindow,
+    (SendImages, GetImages, GUI_SetBatchSizeRemaining, GUI_ResetProgressbar, GUI_IncreaseProgressbar,
+     GUI_UpdatePreviewWindow,
      UpdateTerminationFlag, SetFinishedFlag) = communication_Vars
 
     # Import custom module to extract data from config file
@@ -39,17 +40,25 @@ def mainProcess(communication_Vars):
     IA = ImageAcquirer(Config_module=Config, Warnings_module=warnings)  # Used to retrieve data from the cameras
     IA.Start()  # Start image acquisition
 
-    # Loop this process until termination is called
+    # Loop this process until termination is called or batch is finished
     terminationFlag = False
     terminationMessage = None
-    while not terminationFlag:
-        # Check for termination call
-        terminationFlag = UpdateTerminationFlag()
 
-        # Check thermal status of cameras
-        if IA.thermalCondition() is "Critical":
+    remainingScans = batchSize
+    while not terminationFlag:
+        # Update termination flag
+        if remainingScans <= 0:
+            # Check if batch is complete
             terminationFlag = True
-            terminationMessage = "Critical camera temperatures"
+            terminationMessage = "Batch complete"
+        else:
+            # Check GUI from termination call
+            terminationFlag = UpdateTerminationFlag()
+
+            # Check thermal status of cameras
+            if IA.thermalCondition() is "Critical":
+                terminationFlag = True
+                terminationMessage = "Critical camera temperatures"
 
         # Run normal loop
         if not terminationFlag:
@@ -71,6 +80,10 @@ def mainProcess(communication_Vars):
             FXTimer.Start()
             processedImages = GetImages()
             print("Process time: ", "{0:.3f}".format(FXTimer.Stop()), "s")
+
+            # Decrease remaining scans to one
+            remainingScans -= 1
+            GUI_SetBatchSizeRemaining(remainingScans)
 
             # Send image to GUI
             GUI_UpdatePreviewWindow(processedImages[0])

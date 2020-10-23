@@ -35,8 +35,8 @@ class Helpers:
 
         self.guiProgressbar_Vars = (Lock(), Value('i', 0))  # Used for communicating with GUI progressbar
         self.guiPreviewWindow_Vars = (Lock(), Queue())  # Used to update GUI image preview
+        self.guiBatchSizeRemaining_Vars = (Lock(), Value('i', 0))  # Number of product scans left in batch
 
-        self.ResetMain()  # Set communication objects that need to be reset each run
         self.imagesIn_Vars = (Lock(), Queue())  # Send raw pictures to children
         self.dataOut_Vars = (Lock(), Queue())  # Retrieve processed pictures from children
 
@@ -46,7 +46,7 @@ class Helpers:
 
     # Return values that are used for communication between UI and processes
     def GUI_GetVars(self):
-        return self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
+        return self.guiBatchSizeRemaining_Vars, self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
 
     # Sent new image to GUI's preview window
     def GUI_UpdatePreviewWindow(self, image):
@@ -56,8 +56,8 @@ class Helpers:
 
     # Increase Progressbar in GUI
     def GUI_IncreaseProgressbar(self, increaseValue):
-        (progressbarLock, variable) = self.guiProgressbar_Vars
-        with progressbarLock:
+        (lock, variable) = self.guiProgressbar_Vars
+        with lock:
             variable.value += increaseValue
 
     # Reset Progressbar in GUI to zero
@@ -65,6 +65,12 @@ class Helpers:
         (lock, variable) = self.guiProgressbar_Vars
         with lock:
             variable.value = 0
+
+    # Decrease amount of remaining scans in batch
+    def GUI_SetBatchSizeRemaining(self, value):
+        (lock, variable) = self.guiBatchSizeRemaining_Vars
+        with lock:
+            variable.value = value
 
     ###################
     # AnalysisHelpers #
@@ -132,28 +138,30 @@ class Helpers:
     ################
 
     # Start main program
-    def CreateMain(self):
+    def CreateMain(self, batchSize):
         # Bind variables
         communication_Vars = (
-            self.SendRawImages, self.GetProcessedData, self.GUI_ResetProgressbar, self.GUI_IncreaseProgressbar,
-            self.GUI_UpdatePreviewWindow, self.UpdateTerminationFlag, self.SetFinishedFlag)
+            self.SendRawImages, self.GetProcessedData, self.GUI_SetBatchSizeRemaining, self.GUI_ResetProgressbar,
+            self.GUI_IncreaseProgressbar, self.GUI_UpdatePreviewWindow, self.UpdateTerminationFlag,
+            self.SetFinishedFlag)
 
         # Create process
-        self.Main_Process = Process(target=self.mainProcess, args=(communication_Vars,))
+        self.Main_Process = Process(target=self.mainProcess, args=(batchSize, communication_Vars,))
 
     # Start main process
-    def Start(self):
+    def Start(self, batchSize):
         # Reset variable that could exist from previous runs
-        self.ResetMain()
+        self.ResetMain(batchSize)
 
         # Create main process
-        self.CreateMain()
+        self.CreateMain(batchSize)
 
         # Start main process
         self.Main_Process.start()
 
     # Reset parameters if the code has been run before
-    def ResetMain(self):
+    def ResetMain(self, batchSize):
+        self.GUI_SetBatchSizeRemaining(batchSize)
         self.idleAnalysisHelpers_Vars = (Lock(), Value('i', 0))  # Check number of idle analysis helpers
         self.terminate_Vars = (Lock(), Value('b', False))  # Terminate main program
         self.mainProcessFinished_Vars = (Lock(), Value('b', False))  # Terminate children
