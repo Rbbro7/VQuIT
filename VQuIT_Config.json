@@ -49,7 +49,7 @@
           "Description": "Timed leaves the timing up to the camera\nTimedTriggered lets the software decide"
         },
         "ExposureTime": {
-          "Value": 1770,
+          "Value": 3770,
           "Description": "Time during which the sensor is exposed to light in microseconds\nDatasheet{min: 40µs, max: acq - 226µs}\nSoftware{min: 15µs}"
         }
       },

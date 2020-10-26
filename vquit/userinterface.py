@@ -13,34 +13,23 @@ ProductData = ProductData()
 
 class Application(QMainWindow):
 
-    def __init__(self, helperVariables, startFunction, abortFunction):
+    def __init__(self, helperVariables, executionFunctions):
         # Bind to a QMainWindow instance
         super(Application, self).__init__()
 
-        # Extract parameters from helper object
-        guiBatchSizeRemainingVars, guiProgressbarVars, guiImagePreviewVars = helperVariables
+        # Setup execution handler thread
+        self.exeHandlerThread = ExecutionHandler()  # Create update thread
+        self.exeHandlerThread.Setup(executionFunctions, self.GetBatchSize)  # Set variables of thread
+        self.exeHandlerThread.executionState.connect(self.UpdateGUI)  # Connect thread signal to class function
+        self.exeHandlerThread.start()  # Start thread
 
-        # Create links to external functions
-        self.startFunction = startFunction
-        self.abortFunction = abortFunction
-
-        # Setup remaining batch checker
-        self.batchThread = RemainingBatchThread()  # Create progressbar thread
-        self.batchThread.Setup(guiBatchSizeRemainingVars)  # Set variables of thread
-        self.batchThread.remainingBatch.connect(self.SetRemainingBatch)  # Connect thread signal to class function
-        self.batchThread.start()  # Start thread
-
-        # Setup progressbar
-        self.thread = ProgressbarThread()  # Create progressbar thread
-        self.thread.Setup(guiProgressbarVars)  # Set variables of thread
-        self.thread.progress.connect(self.SetProgressbar)  # Connect thread signal to class function
-        self.thread.start()  # Start thread
-
-        # Setup image preview
-        self.imgThread = ImagePreviewThread()  # Create progressbar thread
-        self.imgThread.Setup(guiImagePreviewVars)  # Set variables of thread
-        self.imgThread.image.connect(self.UpdateImagePreview)  # Connect thread signal to class function
-        self.imgThread.start()  # Start thread
+        # Setup GUI update thread
+        self.updateThread = UpdateThread()  # Create update thread
+        self.updateThread.Setup(helperVariables)  # Set variables of thread
+        self.updateThread.remainingBatch.connect(self.SetRemainingBatch)
+        self.updateThread.progress.connect(self.SetProgressbar)
+        self.updateThread.image.connect(self.UpdateImagePreview)
+        self.updateThread.start()  # Start thread
 
         # Get screen size
         user32 = ctypes.windll.user32
@@ -96,7 +85,7 @@ class Application(QMainWindow):
         self.productSelector = QtWidgets.QComboBox()
         self.productSelector.setMinimumHeight(35)
         self.productSelector.addItems(["Automatic", "Adimec Camera 1", "Adimec Camera 2"])
-        self.productSelector.currentIndexChanged.connect(self.OnChange)
+        self.productSelector.currentIndexChanged.connect(self.OnDropdownChange)
 
         # Create product selector group
         layout = QtWidgets.QGridLayout()
@@ -219,7 +208,7 @@ class Application(QMainWindow):
         self.executionButton.setGeometry(self.executionButtonX, self.executionButtonY, self.executionButtonWidth,
                                          self.executionButtonHeight)
         self.executionButton.setText("Start Program")
-        self.executionButton.clicked.connect(self.OnClick)
+        self.executionButton.clicked.connect(self.OnButtonClick)
 
         # mainLayout = QtWidgets.QGridLayout()
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
@@ -238,8 +227,12 @@ class Application(QMainWindow):
         if value > 0:
             self.slider.setValue(value)
         else:
-            # Update GUI
-            self.GUI_Idle()
+            # Change execution mode to Idle
+            self.exeHandlerThread.RequestExecutionChange()
+
+    # Used by external threads to get the current batchSize
+    def GetBatchSize(self):
+        return self.slider.value()
 
     # Set value of progressbar
     def SetProgressbar(self, value):
@@ -254,56 +247,53 @@ class Application(QMainWindow):
         self.productSelector.setEnabled(value)
         self.slider.setEnabled(value)
 
+    # Update the GUI (called on signal state of executionHandler
+    def UpdateGUI(self, state):
+        if state is 1:
+            # Update GUI to active mode
+            self.Processing = True
+
+            # Update slider text
+            self.sliderLabel.setText("Remaining batch: " + str(self.slider.value()))
+            self.sliderLabel.adjustSize()
+
+            # Set button text
+            self.executionButton.setText("Stop Program")
+
+            # Disable settings
+            self.EnableSettings(False)
+        elif state is -1:
+            # Update GUI to idle mode
+
+            # Update slider text
+            self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
+            self.sliderLabel.adjustSize()
+
+            # Set button text
+            self.executionButton.setText("Start Program")
+
+            # Enable settings
+            self.EnableSettings(True)
+
+            # Make execution button available again
+            self.executionButton.setEnabled(True)
+
+            self.Processing = False
+
     Processing = False
-    def GUI_Active(self):
-        self.Processing = True
-
-        # Update slider text
-        self.sliderLabel.setText("Remaining batch: " + str(self.slider.value()))
-        self.sliderLabel.adjustSize()
-
-        # Set button text
-        self.executionButton.setText("Stop Program")
-
-        # Disable settings
-        self.EnableSettings(False)
-
-    def GUI_Idle(self):
-        self.Processing = False
-
-        # Update slider text
-        self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
-        self.sliderLabel.adjustSize()
-
-        # Set button text
-        self.executionButton.setText("Start Program")
-
-        # Enable settings
-        self.EnableSettings(True)
 
     # Execute when pressing button
-    def OnClick(self):
-        # Get text from execution button
-        buttonText = self.executionButton.text()
+    def OnButtonClick(self):
+        # Disable stop button when pressed and program is not finished
+        if self.executionButton.text() == "Stop Program":
+            self.executionButton.setText("Aborting...")
+            self.executionButton.setEnabled(False)
 
-        # Determine action based on buttonText
-        if buttonText == "Start Program":
-            # Start program
-            self.startFunction(self.slider.value())
-
-            # Update GUI
-            self.GUI_Active()
-        elif buttonText == "Stop Program":
-            # Stop program
-            self.abortFunction()
-
-            # Update GUI
-            self.GUI_Idle()
-        else:
-            print("Something weird happened in the GUI")
+        # Request Execution change
+        self.exeHandlerThread.RequestExecutionChange()
 
     # Execute when Dropdown menu has changed
-    def OnChange(self):
+    def OnDropdownChange(self):
         # Get selected product
         selectedProduct = self.productSelector.currentText()
 
@@ -335,78 +325,80 @@ class Application(QMainWindow):
         self.sliderLabel.adjustSize()
 
 
-# Get remaining batch
-class RemainingBatchThread(QThread):
+# Update GUI with data from software
+class UpdateThread(QThread):
+    # Batch
     batchLock = None
     batchValue = None
+    currentRemainingBatch = 0
 
-    # Pass values for communication with multiprocessing
-    def Setup(self, guiBatchSizeRemainingVars):
-        # Store multiprocessing value & lock objects
-        [self.batchLock, self.batchValue] = guiBatchSizeRemainingVars
-
-    # Set signal that transports integers
-    remainingBatch = pyqtSignal(int)
-
-    # Executes when calling self.start()
-    def run(self):
-        # Keep looping
-        while True:
-            # Get current value
-            with self.batchLock:
-                remaining = self.batchValue.value
-
-            # Send value to gui
-            self.remainingBatch.emit(remaining)
-            sleep(0.1)
-
-
-class ProgressbarThread(QThread):
+    # Progressbar
     progressbarLock = None
     progressbarValue = None
+    currentProgress = 0
 
-    # Pass values for communication with multiprocessing
-    def Setup(self, guiProgressbarVars):
-        # Store multiprocessing value & lock objects
-        [self.progressbarLock, self.progressbarValue] = guiProgressbarVars
-
-    # Set signal that transports integers
-    progress = pyqtSignal(int)
-
-    # Executes when calling self.start()
-    def run(self):
-        # Keep looping
-        while True:
-            # Get current value
-            with self.progressbarLock:
-                currentProgress = self.progressbarValue.value
-
-            # Cap progress at 100
-            if currentProgress > 100:
-                currentProgress = 100
-
-            # Send value to gui
-            self.progress.emit(currentProgress)
-            sleep(0.1)
-
-
-class ImagePreviewThread(QThread):
+    # Image preview
     imgPreviewLock = None
     imgPreviewQue = None
 
     # Pass values for communication with multiprocessing
-    def Setup(self, guiImagePreviewVars):
+    def Setup(self, helperVariables):
+
+        # Extract parameters from helper object
+        guiBatchSizeRemainingVars, guiProgressbarVars, guiImagePreviewVars = helperVariables
+
         # Store multiprocessing value & lock objects
+        [self.batchLock, self.batchValue] = guiBatchSizeRemainingVars
+        [self.progressbarLock, self.progressbarValue] = guiProgressbarVars
         [self.imgPreviewLock, self.imgPreviewQue] = guiImagePreviewVars
 
-    # Set signal that transports QImages
+    # Set signals that transport data
+    remainingBatch = pyqtSignal(int)
+    progress = pyqtSignal(int)
     image = pyqtSignal(QtGui.QImage)
 
     # Executes when calling self.start()
     def run(self):
         # Keep looping
         while True:
-            # Rest new image
+
+            #############
+            # BatchSize #
+            #############
+
+            # Get current value
+            with self.batchLock:
+                newRemaining = self.batchValue.value
+
+            # When value is different sent signal
+            if newRemaining is not self.currentRemainingBatch:
+                # Send value to gui
+                self.remainingBatch.emit(newRemaining)
+                self.currentRemainingBatch = newRemaining
+
+            ###############
+            # Progressbar #
+            ###############
+
+            # Get current value
+            with self.progressbarLock:
+                newProgress = self.progressbarValue.value
+
+            # Cap progress at 100
+            if newProgress > 100:
+                newProgress = 100
+
+            # When value is different sent signal
+            if newProgress is not self.currentProgress:
+                # Send value to gui
+                self.progress.emit(newProgress)
+                self.currentProgress = newProgress
+
+            #################
+            # Image preview #
+            #################
+
+            # Reset new image
             newImage = None
 
             # Check for new image in queue
@@ -421,4 +413,67 @@ class ImagePreviewThread(QThread):
                 qImg = QtGui.QImage(newImage.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888).rgbSwapped()
                 self.image.emit(qImg)
 
-            sleep(0.5)
+            ####################
+            # Update frequency #
+            ####################
+
+            sleep(0.1)
+
+
+# Control execution of software through GUI
+class ExecutionHandler(QThread):
+    # Execution handler
+    startFunction = None
+    abortFunction = None
+
+    getBatchSizeFunction = None
+
+    currentExeState = None
+    newExeState = None
+
+    # Pass values for communication with multiprocessing
+    def Setup(self, executionFunctions, getBatchSizeFunction):
+        # Store external execution functions
+        (self.startFunction, self.abortFunction) = executionFunctions
+        self.getBatchSizeFunction = getBatchSizeFunction
+
+    # Set signal that transports data
+    executionState = pyqtSignal(int)
+
+    # Executes when calling self.start()
+    def run(self):
+        # Keep looping
+        while True:
+
+            #####################
+            # Execution Handler #
+            #####################
+
+            # Check for a  request for execution state
+            if self.currentExeState is not self.newExeState:
+                if self.currentExeState is None or self.currentExeState is -1:
+                    # Execute start function
+                    self.startFunction(self.getBatchSizeFunction())
+                    self.newExeState = 1
+                else:
+                    # Execute abort function
+                    self.abortFunction()
+                    self.newExeState = -1
+
+                # Send trigger to UI that execution mode has changed
+                self.executionState.emit(self.newExeState)
+
+                # Update internal state variable
+                self.currentExeState = self.newExeState
+
+            ####################
+            # Update frequency #
+            ####################
+
+            sleep(0.1)
+
+    def RequestExecutionChange(self):
+        if self.currentExeState is None or self.currentExeState is -1:
+            self.newExeState = 1
+        else:
+            self.newExeState = -1

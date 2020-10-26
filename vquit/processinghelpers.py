@@ -48,6 +48,11 @@ class Helpers:
     def GUI_GetVars(self):
         return self.guiBatchSizeRemaining_Vars, self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
 
+    # Return functions that control the script execution via the GUI
+    def GUI_GetFunc(self):
+        functions = (self.Start, self.Terminated)
+        return functions
+
     # Sent new image to GUI's preview window
     def GUI_UpdatePreviewWindow(self, image):
         (lock, queue) = self.guiPreviewWindow_Vars
@@ -248,6 +253,11 @@ class Helpers:
             mainVariable.value = True
 
         print("Waiting on main program to be terminated...", end='\r')
+
+        # Don't call join function before before the process is finished (prevent freeze)
+        while self.Main_Process.is_alive() is True:
+            pass
+
         # Prevent script from exiting before main process is finished
         self.Main_Process.join()
 

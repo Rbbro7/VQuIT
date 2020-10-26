@@ -112,6 +112,13 @@ class Image:
         cv2 = self.ImportOpenCV()
         return cv2.bilateralFilter(image, 7, 50, 50)
 
+    # combine images into a grid
+    def Grid(self, img1, img2, img3, img4):
+        np = self.ImportNumpy()
+        r1 = np.hstack(img1, img2)
+        r2 = np.hstack(img3, img4)
+        return np.vstack(r1, r2)
+
 
 ImageModule = Image()
 

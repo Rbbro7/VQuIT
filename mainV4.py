@@ -70,6 +70,9 @@ def mainProcess(batchSize, communication_Vars):
             fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
             print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
+            # Temp send original
+            GUI_UpdatePreviewWindow(fetchedImages[0])
+
             # Update progressbar
             GUI_IncreaseProgressbar(20)
 
@@ -235,7 +238,7 @@ if __name__ == '__main__':
 
     # Init user interface packages
     APP = QApplication(sys.argv)  # Pass commandline parameters to app
-    GUI = Application(Helpers.GUI_GetVars(), Helpers.Start, Helpers.Terminated)
+    GUI = Application(Helpers.GUI_GetVars(), Helpers.GUI_GetFunc())
 
     # Show GUI window
     GUI.show()
