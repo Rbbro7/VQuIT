@@ -20,39 +20,37 @@
       "Images": [
         {
           "FileName": "example.png",
-          "Camera": {
-            "ID": 0,
-            "ExposureTime": 0,
-            "Gain": 0,
-            "Lens": "No Lens Data"
-          },
-          "Lighting": [
+          "Camera": [
             {
               "ID": 0,
-              "Intensity": 100
-            },
-            {
-              "ID": 1,
-              "Intensity": 100
+              "ExposureTime": 0,
+              "Gain": 0,
+              "BlackLevel": 0,
+              "Lens": "No Lens Data",
+              "Lighting": [
+                {
+                  "ID": 0,
+                  "Intensity": 100
+                }
+              ]
             }
           ]
         },
         {
-          "FileName": "example2.png",
-          "Camera": {
-            "ID": 1,
-            "ExposureTime": 0,
-            "Gain": 0,
-            "Lens": "No Lens Data"
-          },
-          "Lighting": [
+          "FileName": "example.png",
+          "Camera": [
             {
               "ID": 0,
-              "Intensity": 100
-            },
-            {
-              "ID": 1,
-              "Intensity": 100
+              "ExposureTime": 0,
+              "Gain": 0,
+              "BlackLevel": 0,
+              "Lens": "No Lens Data",
+              "Lighting": [
+                {
+                  "ID": 0,
+                  "Intensity": 100
+                }
+              ]
             }
           ]
         }

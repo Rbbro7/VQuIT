@@ -3,7 +3,7 @@
     "ImageTestLabel": "test7",
     "ImagePlots": 1,
     "JumboPackets": 1,
-    "ActiveCameras": 6,
+    "ActiveCameras": 4,
     "DataScanning": 1,
     "Binning": 0,
     "ReducedImageDetection": 1
@@ -49,8 +49,8 @@
           "Description": "Timed leaves the timing up to the camera\nTimedTriggered lets the software decide"
         },
         "ExposureTime": {
-          "Value": 3770,
-          "Description": "Time during which the sensor is exposed to light in microseconds\nDatasheet{min: 40µs, max: acq - 226µs}\nSoftware{min: 15µs}"
+          "Value": 150000,
+          "Description": "{CTarget: 13770} Time during which the sensor is exposed to light in microseconds\nDatasheet{min: 40µs, max: acq - 226µs}\nSoftware{min: 15µs}"
         }
       },
       "TimedTriggered_Parameters": {
@@ -82,7 +82,7 @@
         "Camera": "H",
         "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:46)",
         "Gain": {
-          "Value": 240,
+          "Value": 1,
           "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
         },
         "BlackLevel": {
@@ -90,16 +90,16 @@
           "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
         },
         "ColorCorrection": {
-          "Red": 1.118,
-          "Green": 0.949,
-          "Blue": 1.152
+          "Red": 1.3,
+          "Green": 0.4,
+          "Blue": 1.9
         }
       },
       {
         "Camera": "B",
         "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3e)",
         "Gain": {
-          "Value": 24,
+          "Value": 1,
           "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
         },
         "BlackLevel": {
@@ -107,16 +107,16 @@
           "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
         },
         "ColorCorrection": {
-          "Red": 1.762,
-          "Green": 1.525,
-          "Blue": 3.558
+          "Red": 1.3,
+          "Green": 0.4,
+          "Blue": 1.9
         }
       },
       {
         "Camera": "C",
         "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3f)",
         "Gain": {
-          "Value": 24,
+          "Value": 1,
           "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
         },
         "BlackLevel": {
@@ -124,20 +124,37 @@
           "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
         },
         "ColorCorrection": {
-          "Red": 0,
-          "Green": 0,
-          "Blue": 0
+          "Red": 1.3,
+          "Green": 0.4,
+          "Blue": 1.9
         }
       },
       {
         "Camera": "D",
         "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:40)",
         "Gain": {
-          "Value": 24,
+          "Value": 1,
           "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
         },
         "BlackLevel": {
           "Value": 64,
+          "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
+        },
+        "ColorCorrection": {
+          "Red": 1.3,
+          "Green": 0.4,
+          "Blue": 1.9
+        }
+      },
+      {
+        "Camera": "A",
+        "ID": "D-12A09c_GV-S01(70:b3:d5:85:40:3d)",
+        "Gain": {
+          "Value": 0,
+          "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
+        },
+        "BlackLevel": {
+          "Value": 0,
           "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
         },
         "ColorCorrection": {
@@ -196,25 +213,54 @@
           "Green": 0,
           "Blue": 0
         }
-      },
-      {
-        "Camera": "H",
-        "ID": "",
-        "Gain": {
-          "Value": 0,
-          "Description": "1 = 0.1dB gain\n0->24dB: Analog gain\n24->48dB: Digital gain\nMore gain can brighten up a dark image, however this introduces more noise\nBest practice is to increase the lighting instead of gain"
-        },
-        "BlackLevel": {
-          "Value": 0,
-          "Description": "Value between 0 to 4095 (higher = brighter picture)\nPrevent clipping of the minimum value above 0\nUsed to bring the minimum values closer to 0 if they are shifted up by the gain\n"
-        },
-        "ColorCorrection": {
-          "Red": 0,
-          "Green": 0,
-          "Blue": 0
-        }
       }
     ]
+  },
+  "Lighting": {
+    "PinID": {
+      "U": [
+        6,
+        0,
+        0,
+        16
+      ],
+      "D": [
+        26,
+        0,
+        0,
+        5
+      ]
+    },
+    "PWM_value": {
+      "TopCamera": {
+        "U": [
+          255,
+          0,
+          0,
+          255
+        ],
+        "D": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "BottomCamera": {
+        "U": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "D": [
+          255,
+          0,
+          0,
+          255
+        ]
+      }
+    }
   },
   "Raspberry": {
     "Name": "VQuIT-RemoteIO",

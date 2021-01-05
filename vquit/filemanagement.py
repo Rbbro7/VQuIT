@@ -18,6 +18,13 @@ class Configuration:
             data = json.load(configFile)[category]
         return data
 
+    # Write to database file
+    def Write(self, data):
+        json = self.ImportJSON()
+
+        with open('VQuIT_Database.json', 'rw') as database:
+            print("Database currently under construction")
+
 
 # Save product info
 class ProductData:

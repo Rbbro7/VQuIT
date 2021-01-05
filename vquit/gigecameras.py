@@ -1,6 +1,5 @@
 # GigE Camera drivers
 class ImageAcquirer:
-
     # Storage for camera modules
     GigE = []
 
@@ -10,9 +9,10 @@ class ImageAcquirer:
     fetchAbort = None
 
     cv2 = None
+    np = None
 
     # Function runs when initializing class
-    def __init__(self, Config_module=None, Warnings_module=None):
+    def __init__(self, SetCameraLighting, Config_module=None, Warnings_module=None):
 
         # Misc
         from time import sleep
@@ -24,6 +24,9 @@ class ImageAcquirer:
 
         # Store custom module
         self.FileConfig = Config_module
+
+        # Lights function
+        self.SetCameraLighting = SetCameraLighting
 
         # GenICam helper
         from harvesters.core import Harvester, TimeoutException
@@ -40,7 +43,7 @@ class ImageAcquirer:
         self.n_camera = self.FileConfig.Get("QuickSettings")["ActiveCameras"]
 
         self.ImportCTI()  # import cti file
-        self.Scan()  # check if producer is available)
+        self.Scan()  # check if producer is available
         self.Create()  # define image Acquirer objects from discovered devices
         self.Config()  # configure image acquirer objects
 
@@ -65,6 +68,13 @@ class ImageAcquirer:
             import cv2
             self.cv2 = cv2
         return self.cv2
+
+    def ImportNumpy(self):
+        if self.np is None:
+            print("Importing Numpy")
+            import numpy as np
+            self.np = np
+        return self.np
 
     # Scan for available producers
     def Scan(self):
@@ -139,41 +149,125 @@ class ImageAcquirer:
             binningType = imgFormat["BinningType"]["Value"][0]
 
         # Set standard camera parameters
-        for i in range(0, len(self.GigE)):
-            print("Setting up camera " + cameraInfo[i]["Camera"] + "...", end="\r")
+        for cameraID in range(0, len(self.GigE)):
+            print("Setting up camera " + cameraInfo[cameraID]["Camera"] + "...", end="\r")
             # ImageFormatControl
-            self.GigE[i].remote_device.node_map.PixelFormat.value = imgFormat["PixelFormat"]["Value"][0]
-            self.GigE[i].remote_device.node_map.Binning.value = binningType
-            self.GigE[i].remote_device.node_map.Width.value = imgWidth
-            self.GigE[i].remote_device.node_map.Height.value = imgHeight
+            self.GigE[cameraID].remote_device.node_map.PixelFormat.value = imgFormat["PixelFormat"]["Value"][0]
+            self.GigE[cameraID].remote_device.node_map.Binning.value = binningType
+            self.GigE[cameraID].remote_device.node_map.ReverseX.value = False
+            self.GigE[cameraID].remote_device.node_map.ReverseY.value = False
 
             # AcquisitionControl
-            self.GigE[i].remote_device.node_map.ExposureMode.value = acquisition["ExposureMode"]["Value"][0]
-            self.GigE[i].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]["Value"]
+            self.GigE[cameraID].remote_device.node_map.ExposureMode.value = acquisition["ExposureMode"]["Value"][0]
+            self.GigE[cameraID].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]["Value"]
 
             # AnalogControl
-            self.GigE[i].remote_device.node_map.GainRaw.value = cameraInfo[i]["Gain"]["Value"]
-            self.GigE[i].remote_device.node_map.BlackLevelRaw.value = cameraInfo[i]["BlackLevel"]["Value"]
+            self.GigE[cameraID].remote_device.node_map.GainRaw.value = cameraInfo[cameraID]["Gain"]["Value"]
+            self.GigE[cameraID].remote_device.node_map.BlackLevelRaw.value = cameraInfo[cameraID]["BlackLevel"]["Value"]
 
             # TransportLayerControl
             self.GigE[
-                i].remote_device.node_map.GevSCPSPacketSize.value = packetSize  # Stock: 1060 | recommended 8228
+                cameraID].remote_device.node_map.GevSCPSPacketSize.value = packetSize  # Stock: 1060 | recommended 8228
 
             # TimedTriggered parameters
-            self.GigE[i].remote_device.node_map.FrameAverage.value = trigger["FrameAverage"]["Value"]
-            self.GigE[i].remote_device.node_map.MultiExposureNumber.value = trigger["MultiExposureNumber"]["Value"]
-            self.GigE[i].remote_device.node_map.MultiExposureInactiveRaw.value = trigger["MultiExposureInactive"][
+            self.GigE[cameraID].remote_device.node_map.FrameAverage.value = trigger["FrameAverage"]["Value"]
+            self.GigE[cameraID].remote_device.node_map.MultiExposureNumber.value = trigger["MultiExposureNumber"][
                 "Value"]
+            self.GigE[cameraID].remote_device.node_map.MultiExposureInactiveRaw.value = \
+                trigger["MultiExposureInactive"][
+                    "Value"]
 
             # Not in use
             # AcquisitionPeriod (Integration time - irrelevant when using TimedTriggered)
             # value: microseconds (min: 102775 µs @4096 x 3008 - BayerRG8 - Binning Disabled (Max frame rate 9.73 Hz) , max: 60s)
+
+        # Set resolution
+        self.SetROI(imgHeight, imgWidth)
 
     # Start image acquisition
     def Start(self):
         print("\nStart image acquisition\n")
         for i in range(0, len(self.GigE)):
             self.GigE[i].start_acquisition()
+
+    # Set Region Of Interest resolution and center resulting image
+    def SetROI(self, height, width, disableAcquisition=None):
+        # Check if height and width are valid
+        heightMax = 3000  # Absolute max 3008
+        widthMax = 3072  # Absolute max 4096
+
+        if height <= heightMax and width <= widthMax:
+            # Increment height and width until a valid combination (for which the pixel area is dividable by 4096) is found
+            # (not fool proof but work with most decent aspect ratios that increment with 100)
+            self.warnings.warn("Dynamic ROI is still an experimental feature and can cause errors")
+            rightValue = False
+            heightMaxReached = False
+            while not rightValue:
+                # Try height and width
+                if ((height * width) % 4096) == 0:
+                    rightValue = True
+                else:
+                    # Try height + 1 and width
+                    height += 1
+                    if height > heightMax:
+                        heightMaxReached = True
+                        height = heightMax
+
+                    if ((height * width) % 4096) == 0:
+                        rightValue = True
+                    else:
+                        # Try height and width + 1
+                        if heightMaxReached is False:
+                            height -= 1
+
+                        width += 1
+                        if width > widthMax:
+                            width = widthMax
+
+                        if ((height * width) % 4096) == 0:
+                            rightValue = True
+                        else:
+                            # Set height + 1 and width + 1 and run loop again
+                            height += 1
+                            if height > heightMax:
+                                heightMaxReached = True
+                                height = heightMax
+            print("Dynamic ROI calculator result: " + str(width) + "x" + str(height))
+
+        # Change settings for all available cameras
+        for cameraID in range(0, len(self.GigE)):
+
+            # Check if requested resolution does not exceed the max for each camera
+            widthMax = self.GigE[cameraID].remote_device.node_map.WidthMax.value
+            heightMax = self.GigE[cameraID].remote_device.node_map.HeightMax.value
+            widthMin = 512
+            heightMin = 512
+
+            # Check boundaries
+            if width in range(widthMin, (widthMax + 1)) and height in range(heightMin, (heightMax + 1)):
+
+                # Image acquisition cannot be on when changing this setting
+                if disableAcquisition is True:
+                    self.GigE[cameraID].stop_acquisition()
+
+                # Set width and height
+                self.GigE[cameraID].remote_device.node_map.Width.value = width
+                self.GigE[cameraID].remote_device.node_map.Height.value = height
+
+                # Set offsets
+                offsetX = round((widthMax - width) / 2)
+                offsetY = round((widthMax - width) / 2)
+                self.GigE[cameraID].remote_device.node_map.OffsetX.value = offsetX
+                self.GigE[cameraID].remote_device.node_map.OffsetY.value = offsetY
+
+                # Turn image acquisition back on
+                if disableAcquisition is True:
+                    self.GigE[cameraID].start_acquisition()
+            else:
+                raise ValueError(
+                    "Requested ROI (" + str(width) + "x" + str(height) + ") must lie between " + str(
+                        widthMin) + "x" + str(heightMin) + " and " + str(widthMax) + "x" + str(
+                        heightMax) + " for camera " + str(cameraID))
 
     # Tweak camera settings on the go
     def camConfig(self, camNr, exposure=None, gain=None, blackLevel=None,
@@ -205,6 +299,10 @@ class ImageAcquirer:
                 if loop > 1 and (loop % 2) is not 0:
                     # Wait before sending new trigger every odd try that is not the first
                     self.sleep(0.5)
+
+                # Turn on lights
+                self.SetCameraLighting(camNr, 1)
+
                 # Trigger camera
                 self.GigE[camNr].remote_device.node_map.TriggerSoftware.execute()
 
@@ -217,15 +315,31 @@ class ImageAcquirer:
 
                     if component is not None:
                         image = component.data.reshape(component.height, component.width)
-                        # BayerRG -> RGB (Does not work proper when scaled down)
+
+                        # Turn off lights
+                        self.SetCameraLighting(camNr, 0)
+
+                        # BayerRG -> RGB (Does not work proper when image is already scaled down)
                         image = cv2.cvtColor(image, cv2.COLOR_BayerRG2RGB)
+
+                        # Transpose + flip to rotate fetched images by +-90 deg
+                        image = cv2.transpose(image)
+                        if camNr % 2 == 0:
+                            # Flip x to rotate bottom cameras -90 deg
+                            flipCode = 0
+                        else:
+                            # Flip y to rotate top cameras +90 deg
+                            flipCode = 1
+                        image = cv2.flip(image, flipCode=flipCode)
+
                         return image
+
             except self.TimeoutException:
                 print("Camera " + str(camNr) + ": Fetch timeout (try " + str(loop) + ")")
             except KeyboardInterrupt:
                 print("Camera " + str(camNr) + ": Fetch interrupted by user (try " + str(loop) + ")")
-            except:
-                print("Camera " + str(camNr) + ": Unexpected error (try " + str(loop) + ")")
+            # except:
+            #     print("Camera " + str(camNr) + ": Unexpected error (try " + str(loop) + ")")
 
             if loop >= self.fetchSoftReboot:
                 print("Camera" + str(camNr) + ": Failed...trying soft reboot (try " + str(loop) + ")")

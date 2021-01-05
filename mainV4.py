@@ -30,15 +30,25 @@ def mainProcess(batchSize, communication_Vars):
     from vquit import RaspberryPi
     IO = RaspberryPi(Config_module=Config)  # Communicate with Raspberry Pi over ethernet
 
+    # TEMPP
+    from vquit import OpenCV
+    CV = OpenCV()
+
     # Create timers to keep track of execution times
     from vquit import Timer
     FetchTimer = Timer()
     FXTimer = Timer()
+    LoopTimer = Timer()
 
     # Start image acquirers
     from vquit import ImageAcquirer
-    IA = ImageAcquirer(Config_module=Config, Warnings_module=warnings)  # Used to retrieve data from the cameras
+    IA = ImageAcquirer(IO.SetCameraLighting, Config_module=Config,
+                       Warnings_module=warnings)  # Used to retrieve data from the cameras
     IA.Start()  # Start image acquisition
+
+    # Import image processing class
+    from vquit import Image
+    Image = Image()
 
     # Loop this process until termination is called or batch is finished
     terminationFlag = False
@@ -62,16 +72,42 @@ def mainProcess(batchSize, communication_Vars):
 
         # Run normal loop
         if not terminationFlag:
+            LoopTimer.Start()
             # Reset progressbar
             GUI_ResetProgressbar()
 
+            # EXPERIMENTAL DYNAMIC ROI SIMULATION
+            #
+            # from random import randint
+            #
+            # # Change ROI for scanned product
+            # xArr = [3000, 2000, 1000, 512, 2500, 2000, 1500, 1000, 512, 3000, 2000, 512, 1000, 2000]
+            # yArr = [3000, 2000, 1000, 512, 2000, 2000, 2000, 2000, 2000, 1000, 1000, 1000, 512, 512]
+            #
+            # pos = randint(0, len(xArr)-1)
+            #
+            # height = xArr[pos]
+            # width = yArr[pos]
+            # print(height, width)
+            #
+            # > height = 2500
+            # > width = 2500
+            # > IA.SetROI(height, width, disableAcquisition=True)
+
             # Fetch images
             FetchTimer.Start()
+            IO.KickstartLights()
             fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
             print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
-            # Temp send original
-            GUI_UpdatePreviewWindow(fetchedImages[0])
+            # print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
+
+            # Set lights in idle mode
+            IO.IdleLights()
+
+            # Send original images to GUI
+            fetchedGrid = Image.Grid(fetchedImages)
+            GUI_UpdatePreviewWindow(fetchedGrid)
 
             # Update progressbar
             GUI_IncreaseProgressbar(20)
@@ -84,12 +120,47 @@ def mainProcess(batchSize, communication_Vars):
             processedImages = GetImages()
             print("Process time: ", "{0:.3f}".format(FXTimer.Stop()), "s")
 
-            # Decrease remaining scans to one
-            remainingScans -= 1
-            GUI_SetBatchSizeRemaining(remainingScans)
+            # Decrease remaining scans to one (currently being phased out in favor of continuous scanning)
+            # <<remainingScans -= 1
+            # <<GUI_SetBatchSizeRemaining(remainingScans)
 
             # Send image to GUI
-            GUI_UpdatePreviewWindow(processedImages[0])
+            processedGrid = Image.Grid(processedImages)
+            GUI_UpdatePreviewWindow(processedGrid)
+
+            #################################
+            # Temporary requirement testing #
+            #################################
+
+            loopTime = LoopTimer.Stop()
+            loopTime = round(loopTime, 2)
+
+            c = Config.Get("Cameras")
+            acquisition = c["Generic"]["AcquisitionControl"]
+            cameraInfo = c["Advanced"]
+
+            exposureTime = acquisition["ExposureTime"]["Value"]
+            gain = cameraInfo[0]["Gain"]["Value"]
+            blackLevel = cameraInfo[0]["BlackLevel"]["Value"]
+
+            # Color correction values
+            ccTable = []
+            ccData = Config.Get("Cameras")["Advanced"]
+            for i in range(0, Config.Get("QuickSettings")["ActiveCameras"]):
+                ccTable.append([ccData[i]["ColorCorrection"]["Red"],
+                                ccData[i]["ColorCorrection"]["Green"],
+                                ccData[i]["ColorCorrection"]["Blue"]])
+
+            lightingConfigUp = Config.Get("Lighting")["PWM_value"]["TopCamera"]["U"]
+            lightingConfigDown = Config.Get("Lighting")["PWM_value"]["TopCamera"]["D"]
+
+            title = "CameraEGB(" + str(exposureTime) + "," + str(gain) + "," + str(blackLevel) + ").Lighting(" + str(
+                lightingConfigUp) + str(lightingConfigDown) + ").CC(" + str(ccTable[0]) + ").Time(" + str(
+                loopTime) + ")."
+
+            # Save images to png
+            CV.SaveAsPNG((str(title) + "Original"), fetchedGrid)
+            CV.SaveAsPNG((str(title) + "Processed"), processedGrid)
 
         # Run exit code
         else:
