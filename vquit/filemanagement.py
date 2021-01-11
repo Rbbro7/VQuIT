@@ -28,6 +28,11 @@ class Configuration:
 
 # Save product info
 class ProductData:
+    # Set custom warning format
+    from vquit.system import WarningFormat
+    import warnings
+    warnings.formatwarning = WarningFormat.SetCustom
+
     getDataMatrix = None
     json = None
 
@@ -40,11 +45,37 @@ class ProductData:
         return self.json
 
     # Return data from configuration file
-    def GetProductInfo(self, productName):
+    def GetProductInfo(self, productName=None, acode=None):
         json = self.ImportJSON()
 
         with open('VQuIT_Database.json', 'r') as database:
-            data = json.load(database)["ProductData"][productName]
+            if acode is not None:
+
+                # Ensure variable is integer
+                acode = int(acode)
+
+                # Search database for acode
+                rawData = json.load(database)
+                for product in rawData:
+                    if rawData[product]["Acode"] == acode:
+                        return rawData[product]
+            elif productName is not None:
+                # Search database for product name
+                return json.load(database)[productName]
+            else:
+                self.warnings.warn("Enter a product name or serial number to retrieve product data from the database")
+            self.warnings.warn("Acode not found in database")
+
+    # Return list of all known products
+    def GetProductList(self):
+        json = self.ImportJSON()
+
+        with open('VQuIT_Database.json', 'r') as database:
+            # Get list of all objects names in database (product names)
+            data = list(json.load(database).keys())
+
+        # Sort alphabetically
+        data.sort()
         return data
 
     # Import barcode scanner module

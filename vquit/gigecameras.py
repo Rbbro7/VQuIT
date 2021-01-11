@@ -190,7 +190,7 @@ class ImageAcquirer:
         for i in range(0, len(self.GigE)):
             self.GigE[i].start_acquisition()
 
-    # Set Region Of Interest resolution and center resulting image
+    # Set Region Of Interest resolution and center resulting image (very experimental)
     def SetROI(self, height, width, disableAcquisition=None):
         # Check if height and width are valid
         heightMax = 3000  # Absolute max 3008

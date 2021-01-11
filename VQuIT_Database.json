@@ -1,61 +1,92 @@
 {
-  "ProductData": {
-    "Adimec Camera 1": {
-      "Acode": 19463,
-      "Other": "Adimec 1"
-    },
-    "Adimec Camera 2": {
-      "Acode": 5234,
-      "Other": "Adimec 2"
-    }
-  },
-  "ScanData": [
-    {
-      "ProductInfo": {
-        "Name": "Product Name",
-        "Date": "yyyy-mm-dd hh:mm",
-        "Acode": "",
-        "S/N": ""
-      },
-      "Images": [
-        {
-          "FileName": "example.png",
-          "Camera": [
-            {
-              "ID": 0,
-              "ExposureTime": 0,
-              "Gain": 0,
-              "BlackLevel": 0,
-              "Lens": "No Lens Data",
-              "Lighting": [
-                {
-                  "ID": 0,
-                  "Intensity": 100
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "FileName": "example.png",
-          "Camera": [
-            {
-              "ID": 0,
-              "ExposureTime": 0,
-              "Gain": 0,
-              "BlackLevel": 0,
-              "Lens": "No Lens Data",
-              "Lighting": [
-                {
-                  "ID": 0,
-                  "Intensity": 100
-                }
-              ]
-            }
+  "Adimec Camera 1": {
+    "ProductName": "Adimec Camera 1",
+    "Acode": 19463,
+    "Configuration": {
+      "Lens": "No lens data",
+      "TopCameras": {
+        "ExposureTime": 0,
+        "Gain": 0,
+        "BlackLevel": 0,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
           ]
         }
-      ],
-      "Remarks": "No remarks for this scan"
+      },
+      "BottomCameras": {
+        "ExposureTime": 0,
+        "Gain": 0,
+        "BlackLevel": 0,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
     }
-  ]
+  },
+  "Adimec Camera 2": {
+    "ProductName": "Adimec Camera 2",
+    "Acode": 5234,
+    "Configuration": {
+      "Lens": "No lens data",
+      "TopCameras": {
+        "ExposureTime": 0,
+        "Gain": 0,
+        "BlackLevel": 0,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 0,
+        "Gain": 0,
+        "BlackLevel": 0,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    }
+  }
 }

@@ -1,0 +1,71 @@
+[
+  {
+    "ProductInfo": {
+      "Name": "Product Name",
+      "Acode": "",
+      "S/N": ""
+    },
+    "Images": [
+      {
+        "FileLocation": "example.png",
+        "Date": "yyyy-mm-dd hh:mm",
+        "Remarks": "No remarks for this scan",
+        "Configuration": {
+          "Lens": "No lens data",
+          "TopCameras": {
+            "ExposureTime": 0,
+            "Gain": 0,
+            "BlackLevel": 0,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              }
+            ]
+          },
+          "BottomCameras": {
+            "ExposureTime": 0,
+            "Gain": 0,
+            "BlackLevel": 0,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              }
+            ]
+          }
+        }
+      },
+      {
+        "FileLocation": "example.png",
+        "Date": "yyyy-mm-dd hh:mm",
+        "Remarks": "No remarks for this scan",
+        "Configuration": {
+          "Lens": "No lens data",
+          "TopCameras": {
+            "ExposureTime": 0,
+            "Gain": 0,
+            "BlackLevel": 0,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              }
+            ]
+          },
+          "BottomCameras": {
+            "ExposureTime": 0,
+            "Gain": 0,
+            "BlackLevel": 0,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+]

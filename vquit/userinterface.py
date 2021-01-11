@@ -17,10 +17,31 @@ class Application(QMainWindow):
         # Bind to a QMainWindow instance
         super(Application, self).__init__()
 
+        # Init GUI parameter data
+        self.data_productName = None
+        self.data_acode = None
+        self.data_sn = None
+
+        self.data_Top_ExposureTime = None
+        self.data_Top_Gain = None
+        self.data_Top_BlackLevel = None
+        self.data_Top_Lighting = None
+
+        self.data_Bottom_ExposureTime = None
+        self.data_Bottom_Gain = None
+        self.data_Bottom_BlackLevel = None
+        self.data_Bottom_Lighting = None
+
+        # Standard messages
+        self.productInfoLabel1_Text = "Choose of one the following methods to scan a product:"
+        self.productInfoLabel1_Text += "\n- Scan article code"
+        self.productInfoLabel1_Text += "\n- Select a product in the drop down menu"
+        self.productInfoLabel1_Text += "\n- Enter article code manually"
+
         # Setup execution handler thread
         self.exeHandlerThread = ExecutionHandler()  # Create update thread
         self.exeHandlerThread.Setup(executionFunctions, self.GetBatchSize)  # Set variables of thread
-        self.exeHandlerThread.executionState.connect(self.UpdateGUI)  # Connect thread signal to class function
+        self.exeHandlerThread.executionState.connect(self.UpdateGUI_state)  # Connect thread signal to class function
         self.exeHandlerThread.start()  # Start thread
 
         # Setup GUI update thread
@@ -77,53 +98,122 @@ class Application(QMainWindow):
 
         # Create widgets
         # Product selector label
-        self.productSelectorLabel = QtWidgets.QLabel(self)
-        self.productSelectorLabel.setText("Product type: ")
-        self.productSelectorLabel.adjustSize()
+        self.productSelector_PI_Label = QtWidgets.QLabel(self)
+        self.productSelector_PI_Label.setText("Product type: ")
+        self.productSelector_PI_Label.adjustSize()
+
+        self.productSelector_S_Label = QtWidgets.QLabel(self)
+        self.productSelector_S_Label.setText("Product type: ")
+        self.productSelector_S_Label.adjustSize()
 
         # Product selector dropdown menu
-        self.productSelector = QtWidgets.QComboBox()
-        self.productSelector.setMinimumHeight(35)
-        self.productSelector.addItems(["Automatic", "Adimec Camera 1", "Adimec Camera 2"])
-        self.productSelector.currentIndexChanged.connect(self.OnDropdownChange)
+        self.productSelector_PI = QtWidgets.QComboBox()
+        self.productSelector_PI.setMinimumHeight(35)
+
+        self.productSelector_S = QtWidgets.QComboBox()
+        self.productSelector_S.setMinimumHeight(35)
+
+        # Get data for dropdown menu
+        dropDownList_PI = ["Automatic", "Manual"]
+        dropDownList_S = ["New product"]
+        for product in ProductData.GetProductList():
+            dropDownList_PI.append(product)
+            dropDownList_S.append(product)
+
+        # Add data to dropdown
+        self.productSelector_PI.addItems(dropDownList_PI)
+        self.productSelector_PI.currentIndexChanged.connect(self.OnChange_PI_Dropdown)
+
+        self.productSelector_S.addItems(dropDownList_S)
+        self.productSelector_S.currentIndexChanged.connect(self.OnChange_S_Dropdown)
 
         # Create product selector group
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.productSelectorLabel, 0, 0)
-        layout.addWidget(self.productSelector, 0, 1)
+        layout.addWidget(self.productSelector_PI_Label, 0, 0)
+        layout.addWidget(self.productSelector_PI, 0, 1)
         layout.setColumnStretch(1, 1)  # Stretch selector
-        self.productSelectorGroup = QtWidgets.QWidget()
-        self.productSelectorGroup.setLayout(layout)
-        self.productSelectorGroup.setStyleSheet("QLabel { color: white }")
+        self.productSelectorGroup_PI = QtWidgets.QWidget()
+        self.productSelectorGroup_PI.setLayout(layout)
+        self.productSelectorGroup_PI.setStyleSheet("QLabel { color: white }")
+
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.productSelector_S_Label, 0, 0)
+        layout.addWidget(self.productSelector_S, 0, 1)
+        layout.setColumnStretch(1, 1)  # Stretch selector
+        self.productSelectorGroup_S = QtWidgets.QWidget()
+        self.productSelectorGroup_S.setLayout(layout)
+        self.productSelectorGroup_S.setStyleSheet("QLabel { color: white }")
 
         # Create widgets for info group
         # Product info labels
-        self.acodeLabel = QtWidgets.QLabel(self)
-        self.acodeLabel.setText("Acode: retrieving from image...")
-        self.acodeLabel.adjustSize()
+        self.productInfoLabel1 = QtWidgets.QLabel(self)
+        self.productInfoLabel1.setText(self.productInfoLabel1_Text)
+        self.productInfoLabel1.adjustSize()
 
-        self.otherLabel = QtWidgets.QLabel(self)
-        self.otherLabel.setText("Other: retrieving from image...")
-        self.otherLabel.adjustSize()
+        self.acodeInputField = QtWidgets.QLineEdit(self)
+        self.acodeInputField.setPlaceholderText("Type acode here")
+        self.acodeInputField.setStyleSheet("QLineEdit { background-color: #4f4f4f };")
+        self.acodeInputField.setVisible(False)
+        self.acodeInputField.adjustSize()
+
+        self.snInputField = QtWidgets.QLineEdit(self)
+        self.snInputField.setPlaceholderText("Type serial number here")
+        self.snInputField.setStyleSheet("QLineEdit { background-color: #4f4f4f };")
+        self.snInputField.setVisible(False)
+        self.snInputField.adjustSize()
+
+        self.productInfoLabel2 = QtWidgets.QLabel(self)
+        self.productInfoLabel2.setText("")
+        self.productInfoLabel2.adjustSize()
+
+        self.confirmButton = QtWidgets.QPushButton(self)
+        self.confirmButton.setText("Confirm")
+        self.confirmButton.setMinimumHeight(50)
+        self.confirmButton.clicked.connect(self.OnConfirmButtonClick)
+        self.confirmButton.setStyleSheet("QPushButton { color: black }")
+        self.confirmButton.setVisible(False)
+        self.confirmButton.adjustSize()
 
         # Combine widgets in layouts
         # Add widgets to info group
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.acodeLabel, 0, 0)
-        layout.addWidget(self.otherLabel, 1, 0)
-        layout.setRowStretch(2, 1)  # Makes sure content is aligned to top
+        layout.addWidget(self.productInfoLabel1, 0, 0)
+        layout.addWidget(self.acodeInputField, 1, 0)
+        layout.addWidget(self.snInputField, 2, 0)
+        layout.addWidget(self.productInfoLabel2, 3, 0)
+        layout.addWidget(self.confirmButton, 5, 0)
+        layout.setRowStretch(4, 1)  # Makes sure content is aligned to top
         self.productInfoGroup = QtWidgets.QGroupBox("Product info")
         self.productInfoGroup.setLayout(layout)
         self.productInfoGroup.setStyleSheet("color: white")
 
+        # Add widgets to settings group
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(QtWidgets.QLabel("Coming soon"), 0, 0)
+        layout.setRowStretch(1, 1)  # Makes sure content is aligned to top
+        self.settingsGroup = QtWidgets.QGroupBox("Settings")
+        self.settingsGroup.setLayout(layout)
+        self.settingsGroup.setStyleSheet("color: white")
+
+        # Create product info tab
         # Combine drop down menu and info group
         layout = QtWidgets.QGridLayout()
         layout.setContentsMargins(5, 5, 5, 5)
-        layout.addWidget(self.productSelectorGroup, 0, 0)
+        layout.addWidget(self.productSelectorGroup_PI, 0, 0)
         layout.addWidget(self.productInfoGroup, 1, 0)
         layout.setRowMinimumHeight(0, 70)
         self.productInfoTab = QtWidgets.QWidget()
         self.productInfoTab.setLayout(layout)
+
+        # Create settings tab
+        # Combine drop down menu and info group
+        layout = QtWidgets.QGridLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.addWidget(self.productSelectorGroup_S, 0, 0)
+        layout.addWidget(self.settingsGroup, 1, 0)
+        layout.setRowMinimumHeight(0, 70)
+        self.settingsTab = QtWidgets.QWidget()
+        self.settingsTab.setLayout(layout)
 
         #################################################################
 
@@ -134,11 +224,13 @@ class Application(QMainWindow):
 
         self.tabMenu = QtWidgets.QTabWidget(self)
 
-        self.tabMenu.addTab(self.productInfoTab, "Product")
-        self.tabMenu.addTab(QtWidgets.QLabel("Coming soon"), "Advanced settings")
+        self.tabMenu.addTab(self.productInfoTab, "Product Info")
+        self.tabMenu.addTab(self.settingsTab, "Settings")
         self.productInfoTab.setObjectName("tab1")
+        self.settingsTab.setObjectName("tab2")
 
         self.tabMenu.setStyleSheet("QWidget#tab1 { background-color: #4f4f4f };")
+        self.tabMenu.setStyleSheet("QWidget#tab2 { background-color: #4f4f4f };")
         self.tabMenu.setGeometry(self.tabMenuX, self.tabMenuOffset, self.tabMenuWidth, self.tabMenuHeight)
         self.tabMenu.setAutoFillBackground(True)
 
@@ -210,6 +302,9 @@ class Application(QMainWindow):
         self.executionButton.setText("Start Program")
         self.executionButton.clicked.connect(self.OnButtonClick)
 
+        # Prevent program from being started prematurely
+        self.executionButton.setEnabled(False)
+
         # mainLayout = QtWidgets.QGridLayout()
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 1)  # R1 C2
@@ -244,11 +339,24 @@ class Application(QMainWindow):
 
     # Enable or disable GUI settings
     def EnableSettings(self, value):
-        self.productSelector.setEnabled(value)
+        self.productSelector_PI.setEnabled(value)
         self.slider.setEnabled(value)
+        self.confirmButton.setVisible(value)
 
-    # Update the GUI (called on signal state of executionHandler
-    def UpdateGUI(self, state):
+    @staticmethod
+    # Check integrity of input
+    def VerifyInput(inputVar):
+        if len(inputVar) <= 0:
+            print("Input cannot be empty")
+            return False
+        elif inputVar.isspace():
+            print("Input cannot contain whitespace characters")
+            return False
+        else:
+            return True
+
+    # Update signal based GUI elements (used by executionHandler)
+    def UpdateGUI_state(self, state):
         if state is 1:
             # Update GUI to active mode
             self.Processing = True
@@ -282,6 +390,189 @@ class Application(QMainWindow):
 
     Processing = False
 
+    # Update data shown in the GUI
+    def UpdateGUI_data(self):
+        if self.data_productName is not None:
+            # Set new label text for selected product
+            productInfoLabel1 = "Product name: " + str(self.data_productName) + \
+                                "\nAcode: " + str(self.data_acode)
+            if self.data_sn is not None:
+                productInfoLabel1 += "\nSerial number: " + str(self.data_sn)
+
+            productInfoLabel2 = "\nTop camera settings:"
+            productInfoLabel2 += "\nExposure time: " + str(self.data_Top_ExposureTime)
+            productInfoLabel2 += "\nGain: " + str(self.data_Top_Gain)
+            productInfoLabel2 += "\nBlack level: " + str(self.data_Top_BlackLevel)
+            productInfoLabel2 += "\nLighting: " + str(self.data_Top_Lighting)
+
+            productInfoLabel2 += "\n\nBottom camera settings:"
+            productInfoLabel2 += "\nExposure time: " + str(self.data_Bottom_ExposureTime)
+            productInfoLabel2 += "\nGain: " + str(self.data_Bottom_Gain)
+            productInfoLabel2 += "\nBlack level: " + str(self.data_Bottom_BlackLevel)
+            productInfoLabel2 += "\nLighting: " + str(self.data_Bottom_Lighting)
+
+        else:
+            # Set label text to default
+            productInfoLabel1 = self.productInfoLabel1_Text
+            productInfoLabel2 = ""
+
+        self.productInfoLabel1.setText(productInfoLabel1)
+        self.productInfoLabel2.setText(productInfoLabel2)
+
+        # Update fields
+        self.productInfoLabel1.adjustSize()
+        self.productInfoLabel2.adjustSize()
+        self.snInputField.adjustSize()
+        self.acodeInputField.adjustSize()
+        self.confirmButton.adjustSize()
+
+    # Retrieve data from database
+    def GetProductData(self, productName=None, acode=None):
+        if acode is not None:
+            # Get product data based on acode
+            productInfo = ProductData.GetProductInfo(acode=acode)
+        elif productName is not None:
+            # Get product data based on product name
+            productInfo = ProductData.GetProductInfo(productName=productName)
+        else:
+            raise ValueError("Enter a product name or serial number to retrieve product data from the database")
+
+        # Check if retrieved data is valid
+        if isinstance(productInfo, dict):
+            self.data_productName = productInfo["ProductName"]
+            self.data_acode = productInfo["Acode"]
+
+            # Top camera settings
+            topCameraConfig = productInfo["Configuration"]["TopCameras"]
+            self.data_Top_ExposureTime = topCameraConfig["ExposureTime"]
+            self.data_Top_Gain = topCameraConfig["Gain"]
+            self.data_Top_BlackLevel = topCameraConfig["BlackLevel"]
+
+            self.data_Top_Lighting = []
+            for lights in topCameraConfig["Lighting"]["U"]:
+                self.data_Top_Lighting.append(lights)
+            for lights in topCameraConfig["Lighting"]["D"]:
+                self.data_Top_Lighting.append(lights)
+
+            # Bottom camera settings
+            bottomCameraConfig = productInfo["Configuration"]["BottomCameras"]
+            self.data_Bottom_ExposureTime = bottomCameraConfig["ExposureTime"]
+            self.data_Bottom_Gain = bottomCameraConfig["Gain"]
+            self.data_Bottom_BlackLevel = bottomCameraConfig["BlackLevel"]
+
+            self.data_Bottom_Lighting = []
+            for lights in bottomCameraConfig["Lighting"]["U"]:
+                self.data_Bottom_Lighting.append(lights)
+            for lights in bottomCameraConfig["Lighting"]["D"]:
+                self.data_Bottom_Lighting.append(lights)
+
+            # Verify successful data retrieval
+            return True
+        else:
+            # Product not found in database
+            return False
+
+    # Reset local product data
+    def ClearProductData(self):
+        self.data_productName = None
+        self.data_acode = None
+        self.data_sn = None
+
+        self.data_Top_ExposureTime = None
+        self.data_Top_Gain = None
+        self.data_Top_BlackLevel = None
+        self.data_Top_Lighting = None
+
+        self.data_Bottom_ExposureTime = None
+        self.data_Bottom_Gain = None
+        self.data_Bottom_BlackLevel = None
+        self.data_Bottom_Lighting = None
+
+    # Default selection state
+    currentIdentifierMethod = "auto"
+    selectionState = "fixed"
+
+    # Set state of GUI (confirmed vs unconfirmed state)
+    def ChangeSelectionState(self):
+        if self.selectionState is "malleable":
+            # Prevent program from being started
+            self.executionButton.setEnabled(False)
+
+            # Clear previous data
+            self.ClearProductData()
+
+            if self.currentIdentifierMethod is not "auto":
+                self.snInputField.setVisible(True)
+                self.data_sn = None
+
+                # Show confirmation button
+                self.confirmButton.setVisible(True)
+                self.confirmButton.setText("Confirm")
+
+                if self.currentIdentifierMethod == "dropdown":
+                    # Hide field to enter acode
+                    self.acodeInputField.setVisible(False)
+
+                    # Update GUI with product data from dropdown menu
+                    self.GetProductData(productName=self.productSelector_PI.currentText())
+                else:
+                    # Show input fields for manual mode
+                    self.acodeInputField.setVisible(True)
+            else:
+                # Hide input fields
+                self.confirmButton.setVisible(False)
+                self.acodeInputField.setVisible(False)
+                self.snInputField.setVisible(False)
+
+        elif self.selectionState is "fixed":
+            invalidSn = False
+            invalidAcode = False
+
+            if self.currentIdentifierMethod == "auto":
+                # Hide change/confirm button on automatic mode
+                self.confirmButton.setVisible(False)
+            else:
+
+                # Read and validate data from serial number input field
+                sn = self.snInputField.text()
+                if self.VerifyInput(sn):
+                    self.data_sn = sn
+                else:
+                    invalidSn = True
+
+                # Search for product if manual
+                if self.currentIdentifierMethod == "manual":
+                    acode = self.acodeInputField.text()
+
+                    # Check data integrity
+                    if self.VerifyInput(acode):
+                        # Search for product
+                        verification = self.GetProductData(acode=acode)
+
+                        # Check if product is found in database
+                        if verification is False:
+                            invalidAcode = True
+                    else:
+                        invalidAcode = True
+
+                # Only continue if data is valid
+                if invalidAcode is False:
+                    # Change button text
+                    self.confirmButton.setText("Change")
+
+            # Only continue if data is valid
+            if invalidSn is False and invalidAcode is False:
+                # Allow program to start
+                self.executionButton.setEnabled(True)
+
+            if invalidSn is False:
+                self.snInputField.setVisible(False)
+            if invalidAcode is False:
+                self.acodeInputField.setVisible(False)
+
+        # Update GUI data
+        self.UpdateGUI_data()
+
     # Execute when pressing button
     def OnButtonClick(self):
         # Disable stop button when pressed and program is not finished
@@ -292,27 +583,44 @@ class Application(QMainWindow):
         # Request Execution change
         self.exeHandlerThread.RequestExecutionChange()
 
+    # Execute when pressing button
+    def OnConfirmButtonClick(self):
+        # Only update when identifier method is not automatic
+        if self.currentIdentifierMethod != "auto":
+            buttonText = self.confirmButton.text()
+
+            if buttonText == "Change":
+                self.selectionState = "malleable"
+            elif buttonText == "Confirm":
+                self.selectionState = "fixed"
+
+            self.ChangeSelectionState()
+
     # Execute when Dropdown menu has changed
-    def OnDropdownChange(self):
+    def OnChange_PI_Dropdown(self):
         # Get selected product
-        selectedProduct = self.productSelector.currentText()
+        selectedProduct = self.productSelector_PI.currentText()
+
+        # Make product data editable
+        self.selectionState = "malleable"
 
         # Retrieve information on product from database
         if selectedProduct != "Automatic":
-            productInfo = ProductData.GetProductInfo(selectedProduct)
-            acode = productInfo["Acode"]
-            other = productInfo["Other"]
+            if selectedProduct != "Manual":
+                self.currentIdentifierMethod = "dropdown"
+            else:
+                self.currentIdentifierMethod = "manual"
         else:
-            acode = "retrieving from image..."
-            other = "retrieving from image..."
+            # Clear previous data
+            self.currentIdentifierMethod = "auto"
 
-        # Set new label text
-        self.acodeLabel.setText("Acode: " + str(acode))
-        self.otherLabel.setText("Other: " + str(other))
+        # Update selection state and update product data
+        self.ChangeSelectionState()
 
-        # Update label size
-        self.acodeLabel.adjustSize()
-        self.otherLabel.adjustSize()
+    # Execute when Dropdown menu has changed
+    def OnChange_S_Dropdown(self):
+        selectedProduct = self.productSelector_S.currentText()
+        print(selectedProduct)
 
     # Execute when slider changes
     def OnSliderChange(self, value):
