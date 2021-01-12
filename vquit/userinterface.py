@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegularExpression
 from PyQt5.QtWidgets import QMainWindow
 
 import ctypes
@@ -47,6 +47,7 @@ class Application(QMainWindow):
         # Setup GUI update thread
         self.updateThread = UpdateThread()  # Create update thread
         self.updateThread.Setup(helperVariables)  # Set variables of thread
+        self.updateThread.Setup(helperVariables)  # Set variables of thread
         self.updateThread.remainingBatch.connect(self.SetRemainingBatch)
         self.updateThread.progress.connect(self.SetProgressbar)
         self.updateThread.image.connect(self.UpdateImagePreview)
@@ -80,14 +81,26 @@ class Application(QMainWindow):
 
         # Image
         self.previewWindowOffset = 20
-        self.previewWindowWidth = round(self.windowWidth / 2) - (2 * self.previewWindowOffset)
-        self.previewWindowHeight = round(self.windowHeight * (2 / 3)) - (2 * self.previewWindowOffset)
+        self.previewWindowHeight = round(0.5 * (((self.windowWidth / 3) * 2) - (2 * self.previewWindowOffset)))
+        self.previewWindowWidth = self.previewWindowHeight * 2
 
         self.image = QtWidgets.QLabel(self)
         self.image.setScaledContents(True)
         self.image.setGeometry(self.previewWindowOffset, self.previewWindowOffset, self.previewWindowWidth,
                                self.previewWindowHeight)
         self.image.setPixmap(QtGui.QPixmap("assets/previewWindow.png"))
+
+        # Tool visualisation
+        self.toolStateOffset = 20
+        self.toolStateWidth = round(self.windowWidth / 5) - (2 * self.toolStateOffset)
+        self.toolStateX = self.windowWidth - (self.toolStateWidth + self.toolStateOffset)
+        self.toolStateY = self.windowHeight - (self.toolStateWidth + self.toolStateOffset)
+
+        self.toolState = QtWidgets.QLabel(self)
+        self.toolState.setScaledContents(True)
+        self.toolState.setGeometry(self.toolStateX, self.toolStateY, self.toolStateWidth,
+                                   self.toolStateWidth)
+        self.toolState.setPixmap(QtGui.QPixmap("assets/openState.png"))
 
         ############
         # TAB MENU #
@@ -117,8 +130,10 @@ class Application(QMainWindow):
         dropDownList_PI = ["Automatic", "Manual"]
         dropDownList_S = ["New product"]
         for product in ProductData.GetProductList():
-            dropDownList_PI.append(product)
-            dropDownList_S.append(product)
+            # Don't add default to drop down menu
+            if product != "DEFAULT":
+                dropDownList_PI.append(product)
+                dropDownList_S.append(product)
 
         # Add data to dropdown
         self.productSelector_PI.addItems(dropDownList_PI)
@@ -144,11 +159,14 @@ class Application(QMainWindow):
         self.productSelectorGroup_S.setLayout(layout)
         self.productSelectorGroup_S.setStyleSheet("QLabel { color: white }")
 
-        # Create widgets for info group
-        # Product info labels
+        # Create widgets
         self.productInfoLabel1 = QtWidgets.QLabel(self)
         self.productInfoLabel1.setText(self.productInfoLabel1_Text)
         self.productInfoLabel1.adjustSize()
+
+        self.productInfoLabel2 = QtWidgets.QLabel(self)
+        self.productInfoLabel2.setText("")
+        self.productInfoLabel2.adjustSize()
 
         self.acodeInputField = QtWidgets.QLineEdit(self)
         self.acodeInputField.setPlaceholderText("Type acode here")
@@ -156,15 +174,33 @@ class Application(QMainWindow):
         self.acodeInputField.setVisible(False)
         self.acodeInputField.adjustSize()
 
+        validator = QtGui.QRegularExpressionValidator(self)
+        # Allowed: numbers (4 to 26 characters and first character cannot be 0)
+        validator.setRegularExpression(QRegularExpression("([1-9]{1}[0-9]{3,25})"))
+        self.acodeInputField.setValidator(validator)
+
         self.snInputField = QtWidgets.QLineEdit(self)
         self.snInputField.setPlaceholderText("Type serial number here")
         self.snInputField.setStyleSheet("QLineEdit { background-color: #4f4f4f };")
         self.snInputField.setVisible(False)
         self.snInputField.adjustSize()
 
-        self.productInfoLabel2 = QtWidgets.QLabel(self)
-        self.productInfoLabel2.setText("")
-        self.productInfoLabel2.adjustSize()
+        validator = QtGui.QRegularExpressionValidator(self)
+        # Allowed: numbers and letters (4 to 26 characters)
+        validator.setRegularExpression(QRegularExpression("([A-Za-z0-9]{4,26})"))
+        self.snInputField.setValidator(validator)
+
+        self.settingsInputFields = []
+        settingsInputFieldsPlaceholder = ["product name", "acode", "exposure time", "gain", "black level",
+                                          "exposure time", "gain", "black level"]
+
+        # Create input fields for each placeholder
+        for field in range(0, len(settingsInputFieldsPlaceholder)):
+            settingsInputField = QtWidgets.QLineEdit(self)
+            settingsInputField.setPlaceholderText(settingsInputFieldsPlaceholder[field])
+            settingsInputField.setStyleSheet("QLineEdit { background-color: #4f4f4f };")
+            settingsInputField.adjustSize()
+            self.settingsInputFields.append(settingsInputField)
 
         self.confirmButton = QtWidgets.QPushButton(self)
         self.confirmButton.setText("Confirm")
@@ -174,6 +210,13 @@ class Application(QMainWindow):
         self.confirmButton.setVisible(False)
         self.confirmButton.adjustSize()
 
+        self.saveButton = QtWidgets.QPushButton(self)
+        self.saveButton.setText("Save")
+        self.saveButton.setMinimumHeight(50)
+        self.saveButton.clicked.connect(self.OnSaveButtonClick)
+        self.saveButton.setStyleSheet("QPushButton { color: black }")
+        self.saveButton.adjustSize()
+
         # Combine widgets in layouts
         # Add widgets to info group
         layout = QtWidgets.QGridLayout()
@@ -182,15 +225,111 @@ class Application(QMainWindow):
         layout.addWidget(self.snInputField, 2, 0)
         layout.addWidget(self.productInfoLabel2, 3, 0)
         layout.addWidget(self.confirmButton, 5, 0)
-        layout.setRowStretch(4, 1)  # Makes sure content is aligned to top
+        layout.setRowStretch(4, 1)  # Makes sure content is aligned to top and confirm button is placed at the bottom
         self.productInfoGroup = QtWidgets.QGroupBox("Product info")
         self.productInfoGroup.setLayout(layout)
         self.productInfoGroup.setStyleSheet("color: white")
 
         # Add widgets to settings group
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(QtWidgets.QLabel("Coming soon"), 0, 0)
-        layout.setRowStretch(1, 1)  # Makes sure content is aligned to top
+
+        row = 0  # Keep track of rows
+        field = 0  # Keep track of input fields
+
+        # Product name
+        validator = QtGui.QRegularExpressionValidator(self)
+        # First char: uppercase or number
+        # Other char: letters, numbers, and -
+        # Max 5 words, start word with uppercase or number,max 19 char per word
+        validator.setRegularExpression(QRegularExpression(
+            "([A-Z0-9]{1}[A-Za-z0-9-]{0,18})( {1}[A-Z0-9]{1}[A-Za-z0-9-]{0,18}){0,4}"))
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Product name"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Acode
+        validator = QtGui.QRegularExpressionValidator(self)
+        # Allowed: numbers (4 to 26 characters and first character cannot be 0)
+        validator.setRegularExpression(QRegularExpression("([1-9]{1}[0-9]{3,25})"))
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Acode"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Top camera settings
+        layout.addWidget(QtWidgets.QLabel("\nTop camera settings"), row, 0, 1, 2)
+        row += 1
+
+        # Exposure time (Top)
+        validator = QtGui.QIntValidator(40, 2000000, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Exposure time"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Gain (Top)
+        validator = QtGui.QIntValidator(0, 480, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Gain"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Black level (Top)
+        validator = QtGui.QIntValidator(0, 4095, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Black level"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Lighting (Top)
+        layout.addWidget(QtWidgets.QLabel("Lighting"), row, 0)
+        layout.addWidget(QtWidgets.QLabel("Coming soon"), row, 1)
+        row += 1
+
+        # Bottom camera settings
+        layout.addWidget(QtWidgets.QLabel("\nBottom camera settings"), row, 0, 1, 2)
+        row += 1
+
+        # Exposure time (Bottom)
+        validator = QtGui.QIntValidator(40, 2000000, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Exposure time"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Gain (Bottom)
+        validator = QtGui.QIntValidator(0, 480, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Gain"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Black level (Bottom)
+        validator = QtGui.QIntValidator(0, 4095, self)  # Set validation properties of field
+        self.settingsInputFields[field].setValidator(validator)
+        layout.addWidget(QtWidgets.QLabel("Black level"), row, 0)
+        layout.addWidget(self.settingsInputFields[field], row, 1)
+        row += 1
+        field += 1
+
+        # Lighting (Bottom)
+        layout.addWidget(QtWidgets.QLabel("Lighting"), row, 0)
+        layout.addWidget(QtWidgets.QLabel("Coming soon"), row, 1)
+        row += 2
+
+        # Lighting (Bottom)
+        layout.addWidget(self.saveButton, row, 0, 1, 2)
+
+        layout.setRowStretch(row - 1, 1)  # Makes sure content is aligned to top and button to bottom
+        layout.setColumnStretch(1, 1)  # Makes sure content is aligned to left
         self.settingsGroup = QtWidgets.QGroupBox("Settings")
         self.settingsGroup.setLayout(layout)
         self.settingsGroup.setStyleSheet("color: white")
@@ -223,7 +362,6 @@ class Application(QMainWindow):
         self.tabMenuWidth = self.windowWidth - self.previewWindowWidth - (self.tabMenuOffset * 2) - 20
 
         self.tabMenu = QtWidgets.QTabWidget(self)
-
         self.tabMenu.addTab(self.productInfoTab, "Product Info")
         self.tabMenu.addTab(self.settingsTab, "Settings")
         self.productInfoTab.setObjectName("tab1")
@@ -317,6 +455,9 @@ class Application(QMainWindow):
         self.setPalette(self.palette)
         self.show()
 
+        # Prefill settings tab with data
+        self.OnChange_S_Dropdown()
+
     # Set slider based on remaining batch
     def SetRemainingBatch(self, value):
         if value > 0:
@@ -337,23 +478,18 @@ class Application(QMainWindow):
     def UpdateImagePreview(self, value):
         self.image.setPixmap(QtGui.QPixmap(value))
 
+    # Set value of progressbar
+    def UpdateToolStateImage(self, state):
+        if state == "open":
+            self.toolState.setPixmap(QtGui.QPixmap("assets/openState.png"))
+        elif state == "closed":
+            self.toolState.setPixmap(QtGui.QPixmap("assets/closedState.png"))
+
     # Enable or disable GUI settings
     def EnableSettings(self, value):
         self.productSelector_PI.setEnabled(value)
         self.slider.setEnabled(value)
         self.confirmButton.setVisible(value)
-
-    @staticmethod
-    # Check integrity of input
-    def VerifyInput(inputVar):
-        if len(inputVar) <= 0:
-            print("Input cannot be empty")
-            return False
-        elif inputVar.isspace():
-            print("Input cannot contain whitespace characters")
-            return False
-        else:
-            return True
 
     # Update signal based GUI elements (used by executionHandler)
     def UpdateGUI_state(self, state):
@@ -368,6 +504,14 @@ class Application(QMainWindow):
             # Set button text
             self.executionButton.setText("Stop Program")
 
+            # Resize objects
+            # Work in progress potential solution:
+            # https://stackoverflow.com/questions/50611712/qt-resize-layout-during-widget-property-animation
+            # self.tabMenu.resize(QSize(250, self.tabMenuHeight))
+
+            # Update tool image
+            self.UpdateToolStateImage("closed")
+
             # Disable settings
             self.EnableSettings(False)
         elif state is -1:
@@ -379,6 +523,12 @@ class Application(QMainWindow):
 
             # Set button text
             self.executionButton.setText("Start Program")
+
+            # Resize objects
+            # self.tabMenu.resize(QSize(self.tabMenuWidth, self.tabMenuHeight))
+
+            # Update tool image
+            self.UpdateToolStateImage("open")
 
             # Enable settings
             self.EnableSettings(True)
@@ -426,8 +576,35 @@ class Application(QMainWindow):
         self.acodeInputField.adjustSize()
         self.confirmButton.adjustSize()
 
+    # Update dropdown menus
+    def UpdateDropDownMenus(self):
+
+        # Get data for dropdown menu
+        dropDownList_PI = ["Automatic", "Manual"]
+        dropDownList_S = ["New product"]
+        for product in ProductData.GetProductList():
+            # Don't add default to drop down menu
+            if product != "DEFAULT":
+                dropDownList_PI.append(product)
+                dropDownList_S.append(product)
+
+        # Store original index length
+        originalIndexLength_PI = self.productSelector_PI.count()
+        originalIndexLength_S = self.productSelector_S.count()
+
+        # Add data to dropdown
+        self.productSelector_PI.addItems(dropDownList_PI)
+        self.productSelector_S.addItems(dropDownList_S)
+
+        # Remove all old indices
+        for index in range(0, originalIndexLength_PI):
+            self.productSelector_PI.removeItem(0)
+
+        for index in range(0, originalIndexLength_S):
+            self.productSelector_S.removeItem(0)
+
     # Retrieve data from database
-    def GetProductData(self, productName=None, acode=None):
+    def GetProductData(self, productName=None, acode=None, returnValues=None):
         if acode is not None:
             # Get product data based on acode
             productInfo = ProductData.GetProductInfo(acode=acode)
@@ -439,35 +616,40 @@ class Application(QMainWindow):
 
         # Check if retrieved data is valid
         if isinstance(productInfo, dict):
-            self.data_productName = productInfo["ProductName"]
-            self.data_acode = productInfo["Acode"]
 
-            # Top camera settings
-            topCameraConfig = productInfo["Configuration"]["TopCameras"]
-            self.data_Top_ExposureTime = topCameraConfig["ExposureTime"]
-            self.data_Top_Gain = topCameraConfig["Gain"]
-            self.data_Top_BlackLevel = topCameraConfig["BlackLevel"]
+            # Check if data should be stored or returned
+            if returnValues is None:
+                self.data_productName = productInfo["ProductName"]
+                self.data_acode = productInfo["Acode"]
 
-            self.data_Top_Lighting = []
-            for lights in topCameraConfig["Lighting"]["U"]:
-                self.data_Top_Lighting.append(lights)
-            for lights in topCameraConfig["Lighting"]["D"]:
-                self.data_Top_Lighting.append(lights)
+                # Top camera settings
+                topCameraConfig = productInfo["Configuration"]["TopCameras"]
+                self.data_Top_ExposureTime = topCameraConfig["ExposureTime"]
+                self.data_Top_Gain = topCameraConfig["Gain"]
+                self.data_Top_BlackLevel = topCameraConfig["BlackLevel"]
 
-            # Bottom camera settings
-            bottomCameraConfig = productInfo["Configuration"]["BottomCameras"]
-            self.data_Bottom_ExposureTime = bottomCameraConfig["ExposureTime"]
-            self.data_Bottom_Gain = bottomCameraConfig["Gain"]
-            self.data_Bottom_BlackLevel = bottomCameraConfig["BlackLevel"]
+                self.data_Top_Lighting = []
+                for lights in topCameraConfig["Lighting"]["U"]:
+                    self.data_Top_Lighting.append(lights)
+                for lights in topCameraConfig["Lighting"]["D"]:
+                    self.data_Top_Lighting.append(lights)
 
-            self.data_Bottom_Lighting = []
-            for lights in bottomCameraConfig["Lighting"]["U"]:
-                self.data_Bottom_Lighting.append(lights)
-            for lights in bottomCameraConfig["Lighting"]["D"]:
-                self.data_Bottom_Lighting.append(lights)
+                # Bottom camera settings
+                bottomCameraConfig = productInfo["Configuration"]["BottomCameras"]
+                self.data_Bottom_ExposureTime = bottomCameraConfig["ExposureTime"]
+                self.data_Bottom_Gain = bottomCameraConfig["Gain"]
+                self.data_Bottom_BlackLevel = bottomCameraConfig["BlackLevel"]
 
-            # Verify successful data retrieval
-            return True
+                self.data_Bottom_Lighting = []
+                for lights in bottomCameraConfig["Lighting"]["U"]:
+                    self.data_Bottom_Lighting.append(lights)
+                for lights in bottomCameraConfig["Lighting"]["D"]:
+                    self.data_Bottom_Lighting.append(lights)
+
+                # Verify successful data retrieval
+                return True
+            else:
+                return productInfo
         else:
             # Product not found in database
             return False
@@ -498,9 +680,16 @@ class Application(QMainWindow):
             # Prevent program from being started
             self.executionButton.setEnabled(False)
 
+            # Enable tabs
+            self.tabMenu.setTabEnabled(1, True)
+
+            # Enable product selector
+            self.productSelector_PI.setEnabled(True)
+
             # Clear previous data
             self.ClearProductData()
 
+            # Show input fields and confirm button
             if self.currentIdentifierMethod is not "auto":
                 self.snInputField.setVisible(True)
                 self.data_sn = None
@@ -532,36 +721,62 @@ class Application(QMainWindow):
                 # Hide change/confirm button on automatic mode
                 self.confirmButton.setVisible(False)
             else:
+                # Get location of sn validator
+                validatorLocation = self.snInputField.validator()
 
-                # Read and validate data from serial number input field
-                sn = self.snInputField.text()
-                if self.VerifyInput(sn):
-                    self.data_sn = sn
+                # Check if location exists
+                if validatorLocation is not None:
+
+                    # Retrieve state and value from validator
+                    state, value, _ = validatorLocation.validate(self.snInputField.text(), 0)
+
+                    # Store value if input is valid
+                    if state == QtGui.QValidator.Acceptable:
+                        self.data_sn = value
+                    else:
+                        invalidSn = True
                 else:
+                    print("Missing validator")
                     invalidSn = True
 
                 # Search for product if manual
                 if self.currentIdentifierMethod == "manual":
-                    acode = self.acodeInputField.text()
 
-                    # Check data integrity
-                    if self.VerifyInput(acode):
-                        # Search for product
-                        verification = self.GetProductData(acode=acode)
+                    # Get location of acode validator
+                    validatorLocation = self.acodeInputField.validator()
 
-                        # Check if product is found in database
-                        if verification is False:
+                    # Check if location exists
+                    if validatorLocation is not None:
+
+                        # Retrieve state and value from validator
+                        state, value, _ = validatorLocation.validate(self.acodeInputField.text(), 0)
+
+                        # Check if input value is valid
+                        if state == QtGui.QValidator.Acceptable:
+                            # Search for product
+                            verification = self.GetProductData(acode=value)
+
+                            # Check if product is found in database
+                            if verification is False:
+                                invalidAcode = True
+                        else:
                             invalidAcode = True
                     else:
-                        invalidAcode = True
-
-                # Only continue if data is valid
-                if invalidAcode is False:
-                    # Change button text
-                    self.confirmButton.setText("Change")
+                        print("Missing validator")
+                        invalidSn = True
 
             # Only continue if data is valid
             if invalidSn is False and invalidAcode is False:
+                # Change button text
+                self.confirmButton.setText("Change")
+
+                # Go to main tab and lock tabs
+                self.tabMenu.setCurrentIndex(0)
+                self.tabMenu.setTabEnabled(1, False)
+
+                # Disable product selector
+                self.productSelector_PI.setEnabled(False)
+
                 # Allow program to start
                 self.executionButton.setEnabled(True)
 
@@ -573,7 +788,7 @@ class Application(QMainWindow):
         # Update GUI data
         self.UpdateGUI_data()
 
-    # Execute when pressing button
+    # Execute when pressing start button
     def OnButtonClick(self):
         # Disable stop button when pressed and program is not finished
         if self.executionButton.text() == "Stop Program":
@@ -583,7 +798,7 @@ class Application(QMainWindow):
         # Request Execution change
         self.exeHandlerThread.RequestExecutionChange()
 
-    # Execute when pressing button
+    # Execute when pressing confirm button
     def OnConfirmButtonClick(self):
         # Only update when identifier method is not automatic
         if self.currentIdentifierMethod != "auto":
@@ -595,6 +810,68 @@ class Application(QMainWindow):
                 self.selectionState = "fixed"
 
             self.ChangeSelectionState()
+
+    # Execute when pressing save button
+    def OnSaveButtonClick(self):
+        # Get array of input fields
+        inputFields = self.settingsInputFields
+
+        # Create array to store field inputs
+        fieldValues = []
+
+        # Track invalid fields
+        invalidFields = 0
+
+        # Retrieve and validate data from input fields
+        for field in range(0, len(inputFields)):
+            # Get location of linked validator
+            validatorLocation = inputFields[field].validator()
+
+            # Check if location exists
+            if validatorLocation is not None:
+
+                # Retrieve state and value from validator
+                state, value, _ = validatorLocation.validate(inputFields[field].text(), 0)
+
+                # Disregard value if input is invalid
+                if state != QtGui.QValidator.Acceptable:
+                    value = None
+                    invalidFields += 1
+            else:
+                # Field does not have validator
+                value = inputFields[field].text()
+                print("No validator found")
+
+            # Store value
+            fieldValues.append([field, value])
+
+        if invalidFields == 0:
+            # Convert GUI input field data to json object
+            jsonObject = ProductData.JsonfyProductInfo(fieldValues)
+
+            # Append or modify database
+            if self.addingNewProduct:
+                # Append new product
+                ProductData.WriteProductInfo(jsonObject, append=True)
+
+            else:
+                # modify Existing product
+                ProductData.WriteProductInfo(jsonObject, overwrite=True)
+
+            # Update drop down menus
+            self.UpdateDropDownMenus()
+
+            # Go to modified/added section
+            newIndex_PI = self.productSelector_PI.findText(fieldValues[0][1])
+            newIndex_S = self.productSelector_S.findText(fieldValues[0][1])
+            self.productSelector_PI.setCurrentIndex(newIndex_PI)
+            self.productSelector_S.setCurrentIndex(newIndex_S)
+
+            # Go to main tab
+            self.tabMenu.setCurrentIndex(0)
+
+        else:
+            print(str(invalidFields) + " invalid input(s)")  # Improve by specifying which field is invalid
 
     # Execute when Dropdown menu has changed
     def OnChange_PI_Dropdown(self):
@@ -617,10 +894,38 @@ class Application(QMainWindow):
         # Update selection state and update product data
         self.ChangeSelectionState()
 
+    # Determine if new product is added or existing product is altered
+    addingNewProduct = True
+
     # Execute when Dropdown menu has changed
     def OnChange_S_Dropdown(self):
         selectedProduct = self.productSelector_S.currentText()
-        print(selectedProduct)
+        if selectedProduct == "New product":
+            self.addingNewProduct = True
+            self.settingsInputFields[0].setEnabled(True)  # Enable product name field
+            selectedProduct = "DEFAULT"
+        else:
+            self.addingNewProduct = False
+            self.settingsInputFields[0].setEnabled(False)  # Prevent product name from being changed
+        productData = self.GetProductData(productName=selectedProduct, returnValues=True)
+
+        # Prefill input fields
+        if self.addingNewProduct:
+            self.settingsInputFields[0].setText(str(""))
+            self.settingsInputFields[1].setText(str(""))
+        else:
+            self.settingsInputFields[0].setText(str(selectedProduct))
+            self.settingsInputFields[1].setText(str(productData["Acode"]))
+
+        productData = productData["Configuration"]
+
+        self.settingsInputFields[2].setText(str(productData["TopCameras"]["ExposureTime"]))
+        self.settingsInputFields[3].setText(str(productData["TopCameras"]["Gain"]))
+        self.settingsInputFields[4].setText(str(productData["TopCameras"]["BlackLevel"]))
+
+        self.settingsInputFields[5].setText(str(productData["BottomCameras"]["ExposureTime"]))
+        self.settingsInputFields[6].setText(str(productData["BottomCameras"]["Gain"]))
+        self.settingsInputFields[7].setText(str(productData["BottomCameras"]["BlackLevel"]))
 
     # Execute when slider changes
     def OnSliderChange(self, value):
