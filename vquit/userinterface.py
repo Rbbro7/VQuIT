@@ -443,6 +443,20 @@ class Application(QMainWindow):
         # Prevent program from being started prematurely
         self.executionButton.setEnabled(False)
 
+        # Shutdown button
+        self.shutdownButtonOffset = 20
+        self.shutdownButtonHeight = 60
+        self.shutdownButtonWidth = 60
+        self.shutdownButtonX = self.shutdownButtonOffset
+        self.shutdownButtonY = self.windowHeight - (self.shutdownButtonHeight + self.shutdownButtonOffset)
+
+        self.shutdownButton = QtWidgets.QPushButton(self)
+        self.shutdownButton.setGeometry(self.shutdownButtonX, self.shutdownButtonY, self.shutdownButtonWidth,
+                                        self.shutdownButtonHeight)
+        self.shutdownButton.setText("Shutdown")
+        self.shutdownButton.setStyleSheet("color: white; background-color: red")
+        self.shutdownButton.clicked.connect(self.OnShutdownButtonClick)
+
         # mainLayout = QtWidgets.QGridLayout()
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 1)  # R1 C2
@@ -464,7 +478,7 @@ class Application(QMainWindow):
             self.slider.setValue(value)
         else:
             # Change execution mode to Idle
-            self.exeHandlerThread.RequestExecutionChange()
+            self.exeHandlerThread.RequestExecutionChange(0)
 
     # Used by external threads to get the current batchSize
     def GetBatchSize(self):
@@ -514,7 +528,7 @@ class Application(QMainWindow):
 
             # Disable settings
             self.EnableSettings(False)
-        elif state is -1:
+        elif state is 0:
             # Update GUI to idle mode
 
             # Update slider text
@@ -794,9 +808,12 @@ class Application(QMainWindow):
         if self.executionButton.text() == "Stop Program":
             self.executionButton.setText("Aborting...")
             self.executionButton.setEnabled(False)
+            state = 0
+        else:
+            state = 1
 
         # Request Execution change
-        self.exeHandlerThread.RequestExecutionChange()
+        self.exeHandlerThread.RequestExecutionChange(state)
 
     # Execute when pressing confirm button
     def OnConfirmButtonClick(self):
@@ -810,6 +827,9 @@ class Application(QMainWindow):
                 self.selectionState = "fixed"
 
             self.ChangeSelectionState()
+
+    def OnShutdownButtonClick(self):
+        print(self.shutdownButton.text())
 
     # Execute when pressing save button
     def OnSaveButtonClick(self):
@@ -1064,14 +1084,12 @@ class ExecutionHandler(QThread):
 
             # Check for a  request for execution state
             if self.currentExeState is not self.newExeState:
-                if self.currentExeState is None or self.currentExeState is -1:
+                if self.newExeState is 1:
                     # Execute start function
                     self.startFunction(self.getBatchSizeFunction())
-                    self.newExeState = 1
-                else:
+                elif self.newExeState is 0:
                     # Execute abort function
                     self.abortFunction()
-                    self.newExeState = -1
 
                 # Send trigger to UI that execution mode has changed
                 self.executionState.emit(self.newExeState)
@@ -1085,8 +1103,5 @@ class ExecutionHandler(QThread):
 
             sleep(0.1)
 
-    def RequestExecutionChange(self):
-        if self.currentExeState is None or self.currentExeState is -1:
-            self.newExeState = 1
-        else:
-            self.newExeState = -1
+    def RequestExecutionChange(self, state):
+        self.newExeState = state

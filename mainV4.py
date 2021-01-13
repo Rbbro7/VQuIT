@@ -90,17 +90,26 @@ def mainProcess(batchSize, communication_Vars):
             # width = yArr[pos]
             # print(height, width)
             #
-            # > height = 2500
-            # > width = 2500
-            # > IA.SetROI(height, width, disableAcquisition=True)
+
+            # Set ROI
+            height = 2560
+            width = 2560
+            IA.SetROI(height, width, disableAcquisition=True)
 
             # Fetch images
             FetchTimer.Start()
             IO.KickstartLights()
             fetchedImages = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
+
+            # Simulates 4 additional cameras
+            fetchedImagesSim = [IA.RequestFrame(iteration) for iteration in range(0, len(IA.GigE))]
+
+            for image in fetchedImagesSim:
+                fetchedImages.append(image)
+
             print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
-            # print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
+            print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
 
             # Set lights in idle mode
             IO.IdleLights()
@@ -133,7 +142,7 @@ def mainProcess(batchSize, communication_Vars):
             #################################
 
             loopTime = LoopTimer.Stop()
-            loopTime = round(loopTime, 2)
+            loopTime = round(loopTime, 1)
 
             c = Config.Get("Cameras")
             acquisition = c["Generic"]["AcquisitionControl"]
@@ -242,8 +251,14 @@ def analysisProcess(communication_Vars):
                 # Decrease available helpers by 1
                 SetIdleAnalysisHelpers(-1)
 
+                # Temporary code in order to show demo with 4 virtual cameras
+                if dataID <= 3:
+                    tempSimDataID = dataID
+                else:
+                    tempSimDataID = dataID - 4
+
                 # Preprocessing
-                cc = Image.NoiseReduction(Image.ColorCorrection(image, ccTable[dataID]))
+                cc = Image.NoiseReduction(Image.ColorCorrection(image, ccTable[tempSimDataID]))
                 gray = Image.Gray(cc)
                 grayBlur = Image.Blur(gray)
 

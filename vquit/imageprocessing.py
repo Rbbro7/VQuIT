@@ -115,8 +115,8 @@ class Image:
     # combine images into a grid
     def Grid(self, imageArray):
         np = self.ImportNumpy()
-        r1 = np.hstack((imageArray[3], imageArray[1]))
-        r2 = np.hstack((imageArray[2], imageArray[0]))
+        r1 = np.hstack((imageArray[7], imageArray[5], imageArray[3], imageArray[1]))
+        r2 = np.hstack((imageArray[6], imageArray[4], imageArray[2], imageArray[0]))
         return np.vstack((r1, r2))
 
 

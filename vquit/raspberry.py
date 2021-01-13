@@ -43,7 +43,7 @@ class RaspberryPi:
                 for pinID in self.lightingConfig["PinID"][row]:
                     if pinID is not 0:
                         self.PinMode(pinID, 'output')
-                        self.SetPWMFrequency(pinID, -1)  # -1 => default
+                        self.SetPWMFrequency(pinID, 800)  # -1 => default
         except:
             print(
                 "\nError connecting to Raspberry.\nCheck if VQuIT_Config.json>Raspberry>IP_addr has the same IP as inet when running 'ifconfig' on the Raspberry\n")
@@ -219,7 +219,21 @@ class SSH:
         self.client = self.ssh.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(self.ssh.AutoAddPolicy())
-        self.client.connect(self.ip, port=self.port, username=self.username, password=self.password)
+
+        # Try to connect to client until successful
+        connected = False
+        loopCount = 1
+        while not connected:
+            try:
+                self.client.connect(self.ip, port=self.port, username=self.username, password=self.password, timeout=10)
+                connected = True
+            except TimeoutError:
+                loopCount += 1
+                print("Connecting to Raspberry terminal via SSH...(try " + str(loopCount) + ")", end="\r")
+            except KeyboardInterrupt:
+                # Stop script on user interrupt
+                import sys
+                sys.exit("Raspberry connection interrupted with keyboard interrupt")
 
     # Function runs at the end of a "with" statement
     def __exit__(self, exc_type, exc_val, exc_tb):
