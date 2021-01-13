@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRegularExpression
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMainWindow, QMessageBox
 
 import ctypes
 
@@ -16,6 +16,9 @@ class Application(QMainWindow):
     def __init__(self, helperVariables, executionFunctions):
         # Bind to a QMainWindow instance
         super(Application, self).__init__()
+
+        # Send Acode to main process
+        self.SetProductID = executionFunctions[2]
 
         # Init GUI parameter data
         self.data_productName = None
@@ -40,7 +43,7 @@ class Application(QMainWindow):
 
         # Setup execution handler thread
         self.exeHandlerThread = ExecutionHandler()  # Create update thread
-        self.exeHandlerThread.Setup(executionFunctions, self.GetBatchSize)  # Set variables of thread
+        self.exeHandlerThread.Setup(executionFunctions)  # Set variables of thread
         self.exeHandlerThread.executionState.connect(self.UpdateGUI_state)  # Connect thread signal to class function
         self.exeHandlerThread.start()  # Start thread
 
@@ -48,7 +51,7 @@ class Application(QMainWindow):
         self.updateThread = UpdateThread()  # Create update thread
         self.updateThread.Setup(helperVariables)  # Set variables of thread
         self.updateThread.Setup(helperVariables)  # Set variables of thread
-        self.updateThread.remainingBatch.connect(self.SetRemainingBatch)
+        self.updateThread.toolState.connect(self.SetToolState)
         self.updateThread.progress.connect(self.SetProgressbar)
         self.updateThread.image.connect(self.UpdateImagePreview)
         self.updateThread.start()  # Start thread
@@ -186,8 +189,8 @@ class Application(QMainWindow):
         self.snInputField.adjustSize()
 
         validator = QtGui.QRegularExpressionValidator(self)
-        # Allowed: numbers and letters (4 to 26 characters)
-        validator.setRegularExpression(QRegularExpression("([A-Za-z0-9]{4,26})"))
+        # Allowed: numbers (4 to 26 characters)
+        validator.setRegularExpression(QRegularExpression("([0-9]{4,26})"))
         self.snInputField.setValidator(validator)
 
         self.settingsInputFields = []
@@ -403,59 +406,20 @@ class Application(QMainWindow):
                                      self.progressbarHeight)
         self.SetProgressbar(0)
 
-        # Slider
-        self.sliderY = self.progressbarY + self.progressbarX + self.progressbarHeight
-        self.sliderWidth = (self.progressbarWidth - self.progressbarX)
-
-        self.slider = QtWidgets.QSlider(self)
-        self.slider.setOrientation(Qt.Horizontal)
-        self.slider.setGeometry(self.progressbarX, self.sliderY, self.sliderWidth,
-                                self.progressbarHeight)
-        self.slider.setMinimum(1)
-        self.slider.setMaximum(32)
-        self.slider.setValue(1)
-        self.slider.setTickPosition(QtWidgets.QSlider.TicksBothSides)
-        self.slider.setTickInterval(1)
-        self.slider.setSingleStep(1)
-
-        self.slider.valueChanged.connect(self.OnSliderChange)
-
-        # Slider label
-        self.sliderLabelX = self.progressbarWidth + 20
-        self.sliderLabelY = self.sliderY
-        self.sliderLabel = QtWidgets.QLabel(self)
-        self.sliderLabel.move(self.sliderLabelX, self.sliderLabelY)
-        self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
-        self.sliderLabel.adjustSize()
-
         # Execution button
         self.executionButtonHeight = 40
         self.executionButtonWidth = 350
         self.executionButtonX = round((self.previewWindowWidth / 2) - (self.executionButtonWidth / 2))
-        self.executionButtonY = self.sliderY + 40
+        self.executionButtonY = self.progressbarY + 40
 
         self.executionButton = QtWidgets.QPushButton(self)
         self.executionButton.setGeometry(self.executionButtonX, self.executionButtonY, self.executionButtonWidth,
                                          self.executionButtonHeight)
         self.executionButton.setText("Start Program")
-        self.executionButton.clicked.connect(self.OnButtonClick)
+        self.executionButton.clicked.connect(self.OnExecutionButtonClick)
 
         # Prevent program from being started prematurely
         self.executionButton.setEnabled(False)
-
-        # Shutdown button
-        self.shutdownButtonOffset = 20
-        self.shutdownButtonHeight = 60
-        self.shutdownButtonWidth = 60
-        self.shutdownButtonX = self.shutdownButtonOffset
-        self.shutdownButtonY = self.windowHeight - (self.shutdownButtonHeight + self.shutdownButtonOffset)
-
-        self.shutdownButton = QtWidgets.QPushButton(self)
-        self.shutdownButton.setGeometry(self.shutdownButtonX, self.shutdownButtonY, self.shutdownButtonWidth,
-                                        self.shutdownButtonHeight)
-        self.shutdownButton.setText("Shutdown")
-        self.shutdownButton.setStyleSheet("color: white; background-color: red")
-        self.shutdownButton.clicked.connect(self.OnShutdownButtonClick)
 
         # mainLayout = QtWidgets.QGridLayout()
         # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
@@ -472,17 +436,47 @@ class Application(QMainWindow):
         # Prefill settings tab with data
         self.OnChange_S_Dropdown()
 
-    # Set slider based on remaining batch
-    def SetRemainingBatch(self, value):
-        if value > 0:
-            self.slider.setValue(value)
-        else:
-            # Change execution mode to Idle
-            self.exeHandlerThread.RequestExecutionChange(0)
+        # Start program
+        self.exeHandlerThread.RequestExecutionChange(1)
 
-    # Used by external threads to get the current batchSize
-    def GetBatchSize(self):
-        return self.slider.value()
+    # Set tool state
+    def SetToolState(self, state):
+        if state is 1:
+            # Update GUI to active mode
+            self.Processing = True
+
+            # Set button text
+            self.executionButton.setText("Running...")
+
+            # Resize objects
+            # Work in progress potential solution:
+            # https://stackoverflow.com/questions/50611712/qt-resize-layout-during-widget-property-animation
+            # self.tabMenu.resize(QSize(250, self.tabMenuHeight))
+
+            # Update tool image
+            self.UpdateToolStateImage("closed")
+
+            # Disable settings
+            self.EnableSettings(False)
+        elif state is 0:
+            # Update GUI to idle mode
+
+            # Set button text
+            self.executionButton.setText("Start Program")
+
+            # Resize objects
+            # self.tabMenu.resize(QSize(self.tabMenuWidth, self.tabMenuHeight))
+
+            # Update tool image
+            self.UpdateToolStateImage("open")
+
+            # Enable settings
+            self.EnableSettings(True)
+
+            # Make execution button available again
+            self.executionButton.setEnabled(True)
+
+            self.Processing = False
 
     # Set value of progressbar
     def SetProgressbar(self, value):
@@ -502,55 +496,18 @@ class Application(QMainWindow):
     # Enable or disable GUI settings
     def EnableSettings(self, value):
         self.productSelector_PI.setEnabled(value)
-        self.slider.setEnabled(value)
         self.confirmButton.setVisible(value)
+        self.executionButton.setEnabled(False)
 
-    # Update signal based GUI elements (used by executionHandler)
+    # Update signal based GUI elements (used by executionHandler) <---- Phased out
     def UpdateGUI_state(self, state):
-        if state is 1:
-            # Update GUI to active mode
-            self.Processing = True
+        # Code is shutdown properly
+        if state is 0 or state is -1:
+            # Allow window to be closed
+            self.properShutdown = True
 
-            # Update slider text
-            self.sliderLabel.setText("Remaining batch: " + str(self.slider.value()))
-            self.sliderLabel.adjustSize()
-
-            # Set button text
-            self.executionButton.setText("Stop Program")
-
-            # Resize objects
-            # Work in progress potential solution:
-            # https://stackoverflow.com/questions/50611712/qt-resize-layout-during-widget-property-animation
-            # self.tabMenu.resize(QSize(250, self.tabMenuHeight))
-
-            # Update tool image
-            self.UpdateToolStateImage("closed")
-
-            # Disable settings
-            self.EnableSettings(False)
-        elif state is 0:
-            # Update GUI to idle mode
-
-            # Update slider text
-            self.sliderLabel.setText("Batch size: " + str(self.slider.value()))
-            self.sliderLabel.adjustSize()
-
-            # Set button text
-            self.executionButton.setText("Start Program")
-
-            # Resize objects
-            # self.tabMenu.resize(QSize(self.tabMenuWidth, self.tabMenuHeight))
-
-            # Update tool image
-            self.UpdateToolStateImage("open")
-
-            # Enable settings
-            self.EnableSettings(True)
-
-            # Make execution button available again
-            self.executionButton.setEnabled(True)
-
-            self.Processing = False
+            # Close window
+            self.close()
 
     Processing = False
 
@@ -803,17 +760,11 @@ class Application(QMainWindow):
         self.UpdateGUI_data()
 
     # Execute when pressing start button
-    def OnButtonClick(self):
-        # Disable stop button when pressed and program is not finished
-        if self.executionButton.text() == "Stop Program":
-            self.executionButton.setText("Aborting...")
-            self.executionButton.setEnabled(False)
-            state = 0
-        else:
-            state = 1
-
-        # Request Execution change
-        self.exeHandlerThread.RequestExecutionChange(state)
+    def OnExecutionButtonClick(self):
+        # Start program
+        if self.executionButton.text() == "Start Program":
+            self.updateThread.UpdateToolState(1)
+            self.SetProductID(self.data_acode, self.data_sn)
 
     # Execute when pressing confirm button
     def OnConfirmButtonClick(self):
@@ -827,9 +778,6 @@ class Application(QMainWindow):
                 self.selectionState = "fixed"
 
             self.ChangeSelectionState()
-
-    def OnShutdownButtonClick(self):
-        print(self.shutdownButton.text())
 
     # Execute when pressing save button
     def OnSaveButtonClick(self):
@@ -947,23 +895,36 @@ class Application(QMainWindow):
         self.settingsInputFields[6].setText(str(productData["BottomCameras"]["Gain"]))
         self.settingsInputFields[7].setText(str(productData["BottomCameras"]["BlackLevel"]))
 
-    # Execute when slider changes
-    def OnSliderChange(self, value):
-        if self.Processing is True:
-            labelText = "Remaining batch: "
-        else:
-            labelText = "Batch size: "
+    # Perform actions before closing interface
+    properShutdown = False
 
-        self.sliderLabel.setText(labelText + str(value))
-        self.sliderLabel.adjustSize()
+    def closeEvent(self, event):
+
+        # Ignore shutdown if application is not properly shutdown
+        if not self.properShutdown:
+            event.ignore()
+
+            # Let user confirm shutdown or tool and MCU
+            buttonReply = QMessageBox.question(self, 'Closing dialog',
+                                               "Shutting down\nDo you want to shutdown the MCU?",
+                                               QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                                               QMessageBox.Cancel)
+            if buttonReply != QMessageBox.Cancel:
+                print('Shutting down')
+                if buttonReply == QMessageBox.Yes:
+                    print("Shutting down pi")
+                    abortState = -1
+                else:
+                    abortState = 0
+                self.exeHandlerThread.RequestExecutionChange(abortState)
 
 
 # Update GUI with data from software
 class UpdateThread(QThread):
-    # Batch
-    batchLock = None
-    batchValue = None
-    currentRemainingBatch = 0
+    # Tool state
+    toolStateLock = None
+    toolStateValue = None
+    currentToolState = 0
 
     # Progressbar
     progressbarLock = None
@@ -978,15 +939,15 @@ class UpdateThread(QThread):
     def Setup(self, helperVariables):
 
         # Extract parameters from helper object
-        guiBatchSizeRemainingVars, guiProgressbarVars, guiImagePreviewVars = helperVariables
+        toolStateVars, guiProgressbarVars, guiImagePreviewVars = helperVariables
 
         # Store multiprocessing value & lock objects
-        [self.batchLock, self.batchValue] = guiBatchSizeRemainingVars
+        [self.toolStateLock, self.toolStateValue] = toolStateVars
         [self.progressbarLock, self.progressbarValue] = guiProgressbarVars
         [self.imgPreviewLock, self.imgPreviewQue] = guiImagePreviewVars
 
     # Set signals that transport data
-    remainingBatch = pyqtSignal(int)
+    toolState = pyqtSignal(int)
     progress = pyqtSignal(int)
     image = pyqtSignal(QtGui.QImage)
 
@@ -996,18 +957,18 @@ class UpdateThread(QThread):
         while True:
 
             #############
-            # BatchSize #
+            # ToolState #
             #############
 
             # Get current value
-            with self.batchLock:
-                newRemaining = self.batchValue.value
+            with self.toolStateLock:
+                newToolState = self.toolStateValue.value
 
             # When value is different sent signal
-            if newRemaining is not self.currentRemainingBatch:
+            if newToolState is not self.currentToolState:
                 # Send value to gui
-                self.remainingBatch.emit(newRemaining)
-                self.currentRemainingBatch = newRemaining
+                self.toolState.emit(newToolState)
+                self.currentToolState = newToolState
 
             ###############
             # Progressbar #
@@ -1052,6 +1013,12 @@ class UpdateThread(QThread):
 
             sleep(0.1)
 
+    # Switch between active (1) idle (0) and shutdown (-1) mode
+    def UpdateToolState(self, state):
+        # Get current value
+        with self.toolStateLock:
+            self.toolStateValue.value = state
+
 
 # Control execution of software through GUI
 class ExecutionHandler(QThread):
@@ -1059,16 +1026,13 @@ class ExecutionHandler(QThread):
     startFunction = None
     abortFunction = None
 
-    getBatchSizeFunction = None
-
     currentExeState = None
     newExeState = None
 
     # Pass values for communication with multiprocessing
-    def Setup(self, executionFunctions, getBatchSizeFunction):
+    def Setup(self, executionFunctions):
         # Store external execution functions
-        (self.startFunction, self.abortFunction) = executionFunctions
-        self.getBatchSizeFunction = getBatchSizeFunction
+        (self.startFunction, self.abortFunction, _) = executionFunctions
 
     # Set signal that transports data
     executionState = pyqtSignal(int)
@@ -1086,10 +1050,10 @@ class ExecutionHandler(QThread):
             if self.currentExeState is not self.newExeState:
                 if self.newExeState is 1:
                     # Execute start function
-                    self.startFunction(self.getBatchSizeFunction())
-                elif self.newExeState is 0:
+                    self.startFunction()
+                else:
                     # Execute abort function
-                    self.abortFunction()
+                    self.abortFunction(self.newExeState)
 
                 # Send trigger to UI that execution mode has changed
                 self.executionState.emit(self.newExeState)

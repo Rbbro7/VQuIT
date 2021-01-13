@@ -1,5 +1,5 @@
 # Multiprocessing
-from multiprocessing import Process, Queue, Lock, Value
+from multiprocessing import Process, Queue, Lock, Value, Array
 
 
 class Helpers:
@@ -35,7 +35,8 @@ class Helpers:
 
         self.guiProgressbar_Vars = (Lock(), Value('i', 0))  # Used for communicating with GUI progressbar
         self.guiPreviewWindow_Vars = (Lock(), Queue())  # Used to update GUI image preview
-        self.guiBatchSizeRemaining_Vars = (Lock(), Value('i', 0))  # Number of product scans left in batch
+        self.toolState_Vars = (Lock(), Value('i', 0))  # Number of product scans left in batch
+        self.productID_Vars = (Lock(), Array('i', [0, 0]))  # Used to retrieve product data from GUI
 
         self.imagesIn_Vars = (Lock(), Queue())  # Send raw pictures to children
         self.dataOut_Vars = (Lock(), Queue())  # Retrieve processed pictures from children
@@ -46,11 +47,11 @@ class Helpers:
 
     # Return values that are used for communication between UI and processes
     def GUI_GetVars(self):
-        return self.guiBatchSizeRemaining_Vars, self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
+        return self.toolState_Vars, self.guiProgressbar_Vars, self.guiPreviewWindow_Vars
 
     # Return functions that control the script execution via the GUI
     def GUI_GetFunc(self):
-        functions = (self.Start, self.Terminated)
+        functions = (self.Start, self.Terminated, self.SetProductID)
         return functions
 
     # Sent new image to GUI's preview window
@@ -71,9 +72,9 @@ class Helpers:
         with lock:
             variable.value = 0
 
-    # Decrease amount of remaining scans in batch
-    def GUI_SetBatchSizeRemaining(self, value):
-        (lock, variable) = self.guiBatchSizeRemaining_Vars
+    # Communicate tool state between main process and GUI
+    def ToolState(self, value):
+        (lock, variable) = self.toolState_Vars
         with lock:
             variable.value = value
 
@@ -143,33 +144,48 @@ class Helpers:
     ################
 
     # Start main program
-    def CreateMain(self, batchSize):
+    def CreateMain(self):
         # Bind variables
         communication_Vars = (
-            self.SendRawImages, self.GetProcessedData, self.GUI_SetBatchSizeRemaining, self.GUI_ResetProgressbar,
+            self.SendRawImages, self.GetProcessedData, self.GetProductID, self.UpdateToolState,
+            self.GUI_ResetProgressbar,
             self.GUI_IncreaseProgressbar, self.GUI_UpdatePreviewWindow, self.UpdateTerminationFlag,
             self.SetFinishedFlag)
 
         # Create process
-        self.Main_Process = Process(target=self.mainProcess, args=(batchSize, communication_Vars,))
+        self.Main_Process = Process(target=self.mainProcess, args=(communication_Vars,))
 
     # Start main process
-    def Start(self, batchSize):
+    def Start(self):
         # Reset variable that could exist from previous runs
-        self.ResetMain(batchSize)
+        self.ResetMain()
 
         # Create main process
-        self.CreateMain(batchSize)
+        self.CreateMain()
 
         # Start main process
         self.Main_Process.start()
 
     # Reset parameters if the code has been run before
-    def ResetMain(self, batchSize):
-        self.GUI_SetBatchSizeRemaining(batchSize)
-        self.idleAnalysisHelpers_Vars = (Lock(), Value('i', 0))  # Check number of idle analysis helpers
-        self.terminate_Vars = (Lock(), Value('b', False))  # Terminate main program
+    def ResetMain(self):
+        # self.GUI_SetBatchSizeRemaining(batchSize)
+        self.idleAnalysisHelpers_Vars = (Lock(), Value('i', 0))  # Reset number of idle analysis helpers
+        self.terminate_Vars = (Lock(), Value('i', 0))  # Terminate main program
         self.mainProcessFinished_Vars = (Lock(), Value('b', False))  # Terminate children
+
+    # Update tool state
+    def UpdateToolState(self, setState=None):
+
+        (lock, variable) = self.toolState_Vars
+        if setState is not None:
+            # Set new state
+            with lock:
+                variable.value = setState
+        else:
+            # Request current state
+            with lock:
+                updatedState = variable.value
+            return updatedState
 
     # Check for termination call on main process
     def UpdateTerminationFlag(self):
@@ -206,6 +222,18 @@ class Helpers:
             # Increment data ID
             dataID += 1
         print("Images sent to helpers...", end='\r')
+
+    def GetProductID(self):
+        (lock, array) = self.productID_Vars
+        with lock:
+            arrayData = array
+        return arrayData
+
+    def SetProductID(self, acode, sn):
+        (lock, array) = self.productID_Vars
+        with lock:
+            array[0] = int(acode)
+            array[1] = int(sn)
 
     # Retrieve data from children
     def GetProcessedData(self):
@@ -244,13 +272,19 @@ class Helpers:
         return returnedImages
 
     # Terminate children
-    def Terminated(self):
+    def Terminated(self, terminateMode):
+        # Convert abort mode from GUI to terminator mode
+        if terminateMode == 0:
+            terminateMode = 1
+        else:
+            terminateMode = 2
+
         (mainLock, mainVariable) = self.terminate_Vars
 
         # Terminate main process
         print("Terminating main process...", end='\r')
         with mainLock:
-            mainVariable.value = True
+            mainVariable.value = terminateMode
 
         print("Waiting on main program to be terminated...", end='\r')
 

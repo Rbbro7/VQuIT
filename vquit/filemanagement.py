@@ -26,7 +26,7 @@ class Configuration:
             print("Database currently under construction")
 
 
-# Save product info
+# Manage product info
 class ProductData:
     # Set custom warning format
     from vquit.system import WarningFormat
@@ -120,16 +120,16 @@ class ProductData:
                         "BlackLevel": int(blackLevelD),
                         "Lighting": {
                             "U": [
-                                255,
-                                0,
-                                0,
-                                255
-                            ],
-                            "D": [
                                 0,
                                 0,
                                 0,
                                 0
+                            ],
+                            "D": [
+                                255,
+                                0,
+                                0,
+                                255
                             ]
                         }
                     }
@@ -220,3 +220,146 @@ class ProductData:
             return [acode, sn]
 
         return [False, False]
+
+
+# Store image info
+class ImageData:
+    json = None
+    datetime = None
+
+    def ImportJSON(self):
+        if self.json is None:
+            print("Importing JSON")
+            # Import module to read JSON files
+            import json
+            self.json = json
+        return self.json
+
+    # Import module to retrieve current time
+    def ImportDateTime(self):
+        if self.json is None:
+            print("Importing Datetime")
+            # Import module to read JSON files
+            from datetime import datetime
+            self.datetime = datetime
+        return self.datetime
+
+    # Convert GUI input field data to json object
+    def JsonfyProductInfo(self, data, sn, filename, remarks=None, lensData=None):
+        # Work in progress          <----------------------------------------HEREE
+        datetime = self.ImportDateTime()
+
+        productName = data[0][1]
+        acode = data[1][1]
+
+        exposureTimeU = data[2][1]
+        gainU = data[3][1]
+        blackLevelU = data[4][1]
+
+        exposureTimeD = data[5][1]
+        gainD = data[6][1]
+        blackLevelD = data[7][1]
+
+        if remarks is None:
+            remarks = "No remarks for this scan"
+
+        if lensData is None:
+            lensData = "No lens data"
+
+        jsonObject = {
+            "ProductInfo": {
+                "Name": str(productName),
+                "Acode": int(acode),
+                "S/N": sn
+            },
+            "Images": {
+                "FileLocation": str(filename) + ".png",
+                "Date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+                "Remarks": remarks,
+                "Configuration": {
+                    "Lens": lensData,
+                    "TopCameras": {
+                        "ExposureTime": int(exposureTimeU),
+                        "Gain": int(gainU),
+                        "BlackLevel": int(blackLevelU),
+                        "Lighting": [
+                            {
+                                "ID": 0,
+                                "Intensity": 100
+                            }
+                        ]
+                    },
+                    "BottomCameras": {
+                        "ExposureTime": int(exposureTimeD),
+                        "Gain": int(gainD),
+                        "BlackLevel": int(blackLevelD),
+                        "Lighting": [
+                            {
+                                "ID": 0,
+                                "Intensity": 100
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+        return jsonObject
+
+    # Write to database file
+    def WriteImageInfo(self, jsonObject, append=False, overwrite=False):
+        # Work in progress          <----------------------------------------HEREE
+        # Check if append or overwrite is set and not both/neither
+        if (append or overwrite) and (append != overwrite):
+            json = self.ImportJSON()
+
+            # Retrieve original data
+            with open('VQuIT_ImageDatabase.json', 'r') as database:
+                databaseData = json.load(database)
+
+            # Check if key or acode exists
+            authenticProductName = True
+            authenticAcode = True
+            for key in jsonObject.keys():
+                # Check for key
+                if key in databaseData.keys():
+                    authenticProductName = False
+
+                # Check for acode
+                for databaseKey in databaseData.keys():
+                    if jsonObject[key]["Acode"] == databaseData[databaseKey]["Acode"]:
+                        authenticAcode = False
+
+            if append:
+                if authenticProductName and authenticAcode:
+                    print("Appending")
+
+                    # Add JSON object to original database
+                    databaseData.update(jsonObject)
+
+                    # Write appended database to JSON file
+                    with open('VQuIT_ImageDatabase.json', 'w') as database:
+                        json.dump(databaseData, database)
+                else:
+                    print("Product name or Acode already in use")
+                    return False
+            elif overwrite:
+                if not authenticProductName:
+                    print("Overwriting")
+
+                    for key in jsonObject.keys():
+                        for databaseKey in databaseData.keys():
+                            if key == databaseKey:
+                                databaseData[databaseKey] = jsonObject[key]
+
+                    # Rewrite database with new data
+                    with open('VQuIT_ImageDatabase.json', 'w') as database:
+                        json.dump(databaseData, database)
+                else:
+                    print("Existing product not found")
+                    return False
+            else:
+                print("Unknown error")
+                return False
+        else:
+            print("Set append or overwrite to True in order to write to the database")
+            return False

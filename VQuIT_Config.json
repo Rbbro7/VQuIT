@@ -285,7 +285,7 @@
     ]
   },
   "ImageProcessing": {
-    "HelperTimeout": 120,
+    "HelperTimeout": 180,
     "Sobel": {
       "ksize": {
         "Value": 25,

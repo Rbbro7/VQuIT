@@ -3,7 +3,7 @@ class RaspberryPi:
 
     # Function runs when initializing class
     # Connect to Raspberry and configure I/O
-    def __init__(self, Config_module=None):
+    def __init__(self, Config_module=None, TerminationCheck=None):
         # Import time library
         from time import sleep
         self.sleep = sleep
@@ -17,7 +17,7 @@ class RaspberryPi:
         self.lightingConfig = Config_module.Get("Lighting")
 
         # Setting up SSH class
-        self.ssh = SSH(ip, ssh_Port, ssh_User, ssh_Pass)
+        self.ssh = SSH(ip, ssh_Port, ssh_User, ssh_Pass, TerminationCheck)
 
         # Kill any leftovers from previous instances and restart GPIO Daemon
         print('Initializing Raspberry IO via SSH...', end='\r')
@@ -49,7 +49,10 @@ class RaspberryPi:
                 "\nError connecting to Raspberry.\nCheck if VQuIT_Config.json>Raspberry>IP_addr has the same IP as inet when running 'ifconfig' on the Raspberry\n")
         print(" ", end='\n')
 
-    def Disconnect(self):
+    def Disconnect(self, terminationFlag):
+        # Turn off lights
+        self.DisableLights()
+
         # Disconnect IO
         print("Disconnecting from Raspberry IO...", end="\r")
         self.rpi.stop()
@@ -67,6 +70,11 @@ class RaspberryPi:
         #     print("Shutdown Raspberry successfully")
         # else:
         print("Disconnected from Raspberry successfully")
+
+        # Shutdown pi if requested
+        if terminationFlag == 2:
+            with self.ssh:
+                self.ShutdownPi()
 
     # Define IO type
     def PinMode(self, pin, state):
@@ -96,6 +104,11 @@ class RaspberryPi:
     def PWM(self, pin, dutyCycle):
         self.rpi.set_PWM_dutycycle(pin, dutyCycle)
 
+    pwmData = []
+
+    def SetLightingConfig(self, productInfo):
+        self.pwmData = productInfo["Configuration"]
+
     def SetCameraLighting(self, cameraID, state):
         # Convert cameraID to camera row
         if cameraID < 2:
@@ -111,14 +124,14 @@ class RaspberryPi:
 
         if (cameraID % 2) == 0:
             # Camera number is even -> bottom camera
-            cameraPosition = "BottomCamera"
+            cameraPosition = "BottomCameras"
         else:
             # Top camera
-            cameraPosition = "TopCamera"
+            cameraPosition = "TopCameras"
 
         # Retrieve PWM values for light sources (bottom and top must have same size)
-        topLightsPWM = self.lightingConfig["PWM_value"][cameraPosition]["U"]
-        bottomLightsPWM = self.lightingConfig["PWM_value"][cameraPosition]["D"]
+        topLightsPWM = self.pwmData[cameraPosition]["Lighting"]["U"]
+        bottomLightsPWM = self.pwmData[cameraPosition]["Lighting"]["D"]
 
         for absLightID in range(0, len(topLightsPWM)):
             # Bottom lights
@@ -172,11 +185,20 @@ class RaspberryPi:
                         self.PWM(pinID, pwmValue)
             pwmValue = 0
 
-    def IdleLights(self):
+    # Set all lights to specific value
+    def SetAllLights(self, value):
         for row in self.lightingConfig["PinID"]:
             for pinID in self.lightingConfig["PinID"][row]:
                 if pinID is not 0:
-                    self.PWM(pinID, 50)
+                    self.PWM(pinID, value)
+
+    # Set lights in idle mode
+    def IdleLights(self):
+        self.SetAllLights(50)
+
+    # Turn of lights
+    def DisableLights(self):
+        self.SetAllLights(0)
 
     #################
     # SSH Functions #
@@ -201,7 +223,10 @@ class RaspberryPi:
 class SSH:
 
     # Function runs when initializing class
-    def __init__(self, ip, port, username, password):
+    def __init__(self, ip, port, username, password, TerminationCheck):
+        # Allow connection process to be terminated
+        self.UpdateTerminationFlag = TerminationCheck
+
         self.ip = ip
         self.port = port
         self.username = username
@@ -212,6 +237,13 @@ class SSH:
         import paramiko
         self.ssh = paramiko
 
+        # Import socket for error handling during connection
+        import socket
+        self.socket = socket
+
+    # Keep track class has been run before
+    init = True
+
     # Function runs when using class in a "with" statement
     def __enter__(self):
         print('Connecting to Raspberry terminal via SSH...', end='\r')
@@ -220,14 +252,29 @@ class SSH:
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(self.ssh.AutoAddPolicy())
 
-        # Try to connect to client until successful
+        # Try to connect to client until successful or termination
         connected = False
+        terminationFlag = 0
         loopCount = 1
-        while not connected:
+        while (not connected and terminationFlag == 0) or (not connected and not self.init):
+            terminationFlag = self.UpdateTerminationFlag()
+
+            # Stop script if termination is called
+            if terminationFlag != 0 and self.init:
+                exit()
+
             try:
-                self.client.connect(self.ip, port=self.port, username=self.username, password=self.password, timeout=10)
+                self.client.connect(self.ip, port=self.port, username=self.username, password=self.password,
+                                    timeout=10)
                 connected = True
+                self.init = False
             except TimeoutError:
+                loopCount += 1
+                print("Connecting to Raspberry terminal via SSH...(try " + str(loopCount) + ")", end="\r")
+            except self.ssh.SSHException:
+                loopCount += 1
+                print("Connecting to Raspberry terminal via SSH...(try " + str(loopCount) + ")", end="\r")
+            except self.socket.error:
                 loopCount += 1
                 print("Connecting to Raspberry terminal via SSH...(try " + str(loopCount) + ")", end="\r")
             except KeyboardInterrupt:

@@ -16,85 +16,70 @@ warnings.formatwarning = WarningFormat.SetCustom
 
 
 # Get images from cameras
-def mainProcess(batchSize, communication_Vars):
+def mainProcess(communication_Vars):
     # Extract parameters
-    (SendImages, GetImages, GUI_SetBatchSizeRemaining, GUI_ResetProgressbar, GUI_IncreaseProgressbar,
+    (SendImages, GetImages, GetProductID, UpdateToolState, GUI_ResetProgressbar, GUI_IncreaseProgressbar,
      GUI_UpdatePreviewWindow,
      UpdateTerminationFlag, SetFinishedFlag) = communication_Vars
 
     # Import custom module to extract data from config file
-    from vquit import Configuration
+    from vquit import Configuration, OpenCV, Timer, Image, RaspberryPi, ImageAcquirer, ProductData
     Config = Configuration()
 
-    # Start Raspberry
-    from vquit import RaspberryPi
-    IO = RaspberryPi(Config_module=Config)  # Communicate with Raspberry Pi over ethernet
-
-    # TEMPP
-    from vquit import OpenCV
+    # Import opencv module
     CV = OpenCV()
 
     # Create timers to keep track of execution times
-    from vquit import Timer
     FetchTimer = Timer()
     FXTimer = Timer()
     LoopTimer = Timer()
 
-    # Start image acquirers
-    from vquit import ImageAcquirer
-    IA = ImageAcquirer(IO.SetCameraLighting, Config_module=Config,
-                       Warnings_module=warnings)  # Used to retrieve data from the cameras
-    IA.Start()  # Start image acquisition
-
     # Import image processing class
-    from vquit import Image
     Image = Image()
 
-    # Loop this process until termination is called or batch is finished
-    terminationFlag = False
+    ProductData = ProductData()
+
+    # Start Raspberry
+    IO = RaspberryPi(Config_module=Config,
+                     TerminationCheck=UpdateTerminationFlag)  # Communicate with Raspberry Pi over ethernet
+
+    # Start image acquirers
+    IA = ImageAcquirer(IO.SetCameraLighting, Config_module=Config,
+                       Warnings_module=warnings)  # Used to retrieve data from the cameras
+
+    # Loop this process until termination is called
+    terminationFlag = 0
     terminationMessage = None
 
-    remainingScans = batchSize
-    while not terminationFlag:
-        # Update termination flag
-        if remainingScans <= 0:
-            # Check if batch is complete
-            terminationFlag = True
-            terminationMessage = "Batch complete"
-        else:
-            # Check GUI from termination call
-            terminationFlag = UpdateTerminationFlag()
+    idleLights = False
 
-            # Check thermal status of cameras
-            if IA.thermalCondition() is "Critical":
-                terminationFlag = True
-                terminationMessage = "Critical camera temperatures"
+    while terminationFlag == 0:
+
+        # Check for termination call
+        terminationFlag = UpdateTerminationFlag()
+
+        # Check thermal status of cameras
+        if IA.thermalCondition() is "Critical":
+            terminationFlag = 1
+            terminationMessage = "Critical camera temperatures"
 
         # Run normal loop
-        if not terminationFlag:
+        if terminationFlag == 0 and UpdateToolState() is 1:
             LoopTimer.Start()
+
             # Reset progressbar
             GUI_ResetProgressbar()
 
-            # EXPERIMENTAL DYNAMIC ROI SIMULATION
-            #
-            # from random import randint
-            #
-            # # Change ROI for scanned product
-            # xArr = [3000, 2000, 1000, 512, 2500, 2000, 1500, 1000, 512, 3000, 2000, 512, 1000, 2000]
-            # yArr = [3000, 2000, 1000, 512, 2000, 2000, 2000, 2000, 2000, 1000, 1000, 1000, 512, 512]
-            #
-            # pos = randint(0, len(xArr)-1)
-            #
-            # height = xArr[pos]
-            # width = yArr[pos]
-            # print(height, width)
-            #
+            # Disable idle mode
+            idleLights = False
 
-            # Set ROI
-            height = 2560
-            width = 2560
-            IA.SetROI(height, width, disableAcquisition=True)
+            # Get product data from acode
+            acode, sn = GetProductID()
+            productInfo = ProductData.GetProductInfo(acode=acode)
+
+            # Set camera and lighting settings based on acode
+            IA.SetCameraConfig(productInfo)
+            IO.SetLightingConfig(productInfo)
 
             # Fetch images
             FetchTimer.Start()
@@ -109,7 +94,7 @@ def mainProcess(batchSize, communication_Vars):
 
             print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
-            print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
+            # print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
 
             # Set lights in idle mode
             IO.IdleLights()
@@ -128,10 +113,6 @@ def mainProcess(batchSize, communication_Vars):
             FXTimer.Start()
             processedImages = GetImages()
             print("Process time: ", "{0:.3f}".format(FXTimer.Stop()), "s")
-
-            # Decrease remaining scans to one (currently being phased out in favor of continuous scanning)
-            # <<remainingScans -= 1
-            # <<GUI_SetBatchSizeRemaining(remainingScans)
 
             # Send image to GUI
             processedGrid = Image.Grid(processedImages)
@@ -171,6 +152,16 @@ def mainProcess(batchSize, communication_Vars):
             CV.SaveAsPNG((str(title) + "Original"), fetchedGrid)
             CV.SaveAsPNG((str(title) + "Processed"), processedGrid)
 
+            # Set tool state to idle
+            UpdateToolState(setState=0)
+
+        elif terminationFlag == 0:
+            # Idle mode
+            if not idleLights:
+                # Set lights in idle mode
+                IO.IdleLights()
+                idleLights = True
+
         # Run exit code
         else:
             if terminationMessage is None:
@@ -182,11 +173,11 @@ def mainProcess(batchSize, communication_Vars):
             IA.Destroy()
             IA.Reset()
 
-            # Disconnect Raspberry
-            IO.Disconnect()
+            # Manage MCU connection
+            IO.Disconnect(terminationFlag)
 
-            # Let other progresses know the main process is finished
-            SetFinishedFlag()
+    # Let other progresses know the main process is finished
+    SetFinishedFlag()
 
 
 # Image processing function run on children
@@ -224,20 +215,20 @@ def analysisProcess(communication_Vars):
     IdleTimer.Start()
 
     # Loop this process until termination is called
-    terminationFlag = False
+    terminationFlag = 0
     terminationMessage = None
     SetIdleAnalysisHelpers(1)  # Increase available helpers by 1
-    while not terminationFlag:
+    while terminationFlag == 0:
         # Check for termination call
         terminationFlag = UpdateTerminationFlag()
 
         # Check for timeout
         if CheckTimeout(IdleTimer.Stop()) is True:
-            terminationFlag = True
+            terminationFlag = 1
             terminationMessage = "Timeout reached"
 
         # Run normal loop
-        if not terminationFlag:
+        if terminationFlag == 0:
             # Reset image
             image = None
 

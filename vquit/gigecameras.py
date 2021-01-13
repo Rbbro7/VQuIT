@@ -159,11 +159,6 @@ class ImageAcquirer:
 
             # AcquisitionControl
             self.GigE[cameraID].remote_device.node_map.ExposureMode.value = acquisition["ExposureMode"]["Value"][0]
-            self.GigE[cameraID].remote_device.node_map.ExposureTimeRaw.value = acquisition["ExposureTime"]["Value"]
-
-            # AnalogControl
-            self.GigE[cameraID].remote_device.node_map.GainRaw.value = cameraInfo[cameraID]["Gain"]["Value"]
-            self.GigE[cameraID].remote_device.node_map.BlackLevelRaw.value = cameraInfo[cameraID]["BlackLevel"]["Value"]
 
             # TransportLayerControl
             self.GigE[
@@ -269,22 +264,44 @@ class ImageAcquirer:
                         widthMin) + "x" + str(heightMin) + " and " + str(widthMax) + "x" + str(
                         heightMax) + " for camera " + str(cameraID))
 
+    def SetCameraConfig(self, productInfo):
+
+        # Stop image acquisition to make changes
+        self.Stop()
+
+        # Set configuration for all cameras based on acode of product
+        for cameraID in range(0, len(self.GigE)):
+            if (cameraID % 2) == 0:
+                # Camera number is even -> bottom camera
+                cameraPosition = "BottomCameras"
+            else:
+                # Top camera
+                cameraPosition = "TopCameras"
+            cameraConfig = productInfo["Configuration"][cameraPosition]
+
+            self.camConfig(cameraID, exposure=cameraConfig["ExposureTime"], gain=cameraConfig["Gain"],
+                           blackLevel=cameraConfig["BlackLevel"])
+
+        # Set ROI
+        self.SetROI(2560, 2560)
+
+        # Restart image acquisition after changes are made
+        self.Start()
+
+        # self.data_Top_Lighting = []
+        # for lights in cameraConfig["Lighting"]["U"]:
+        #     self.data_Top_Lighting.append(lights)
+        # for lights in cameraConfig["Lighting"]["D"]:
+        #     self.data_Top_Lighting.append(lights)
+
     # Tweak camera settings on the go
-    def camConfig(self, camNr, exposure=None, gain=None, blackLevel=None,
-                  frameAveraging=None, multiExposureNumber=None, multiExposureInactive=None):
+    def camConfig(self, camNr, exposure=None, gain=None, blackLevel=None):
         if exposure:
             self.GigE[camNr].remote_device.node_map.ExposureTimeRaw.value = exposure
         if gain:
             self.GigE[camNr].remote_device.node_map.GainRaw.value = gain
         if blackLevel:
             self.GigE[camNr].remote_device.node_map.BlackLevelRaw.value = blackLevel
-        if frameAveraging:
-            self.GigE[camNr].remote_device.node_map.FrameAverage.value = frameAveraging
-        if multiExposureNumber:
-            self.GigE[camNr].remote_device.node_map.MultiExposureNumber.value = multiExposureNumber
-        if multiExposureInactive:
-            self.GigE[
-                camNr].remote_device.node_map.MultiExposureInactiveRaw.value = multiExposureInactive  # time between exposures in a single frame
 
     # Retrieve camera data
     def RequestFrame(self, camNr):
