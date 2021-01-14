@@ -6,9 +6,13 @@ import ctypes
 
 from time import sleep
 
-from vquit import ProductData
+from vquit import ProductData, ImageData, OpenFile
+
+import os
 
 ProductData = ProductData()
+ImageData = ImageData()
+OpenFile = OpenFile()
 
 
 class Application(QMainWindow):
@@ -416,23 +420,6 @@ class Application(QMainWindow):
         self.tabMenu.setGeometry(self.tabMenuX, self.tabMenuOffset, self.tabMenuWidth, self.tabMenuHeight)
         self.tabMenu.setAutoFillBackground(True)
 
-        # layout = QtWidgets.QGridLayout()
-        # layout.setContentsMargins(5, 5, 5, 5)
-        #
-        # layout.setColumnMinimumWidth(1, 200)
-        # layout.setRowMinimumHeight(0, 500)
-        # layout.setColumnStretch(0, 1)
-        # layout.setRowStretch(0, 1)
-        #
-        # layout.addWidget(self.image, 0, 0)
-        # layout.addWidget(self.tabMenu, 0, 1)
-        #
-        # self.mainLayout = QtWidgets.QWidget(self)
-        # self.mainLayout.setLayout(layout)
-        #
-        # self.image.setPixmap(QtGui.QPixmap("assets/previewWindow.png"))
-        # self.image.setScaledContents(True)
-
         #################################################################
 
         # Progressbar
@@ -462,14 +449,12 @@ class Application(QMainWindow):
         # Prevent program from being started prematurely
         self.executionButton.setEnabled(False)
 
-        # mainLayout = QtWidgets.QGridLayout()
-        # mainLayout.addWidget(self.topLeftGroupBox, 0, 0)  # R1 C1
-        # mainLayout.addWidget(self.topLeftGroupBox, 0, 1)  # R1 C2
-        # mainLayout.setRowStretch(0, 1)
-        # # mainLayout.setRowStretch(2, 1)
-        # # mainLayout.setColumnStretch(0, 1)
-        # # mainLayout.setColumnStretch(1, 1)
-        # self.setLayout(mainLayout)
+        # Open image button
+        self.openImageButton = QtWidgets.QPushButton(self)
+        self.openImageButton.setGeometry(self.executionButtonX + self.executionButtonWidth + 20, self.executionButtonY,
+                                         150, self.executionButtonHeight)
+        self.openImageButton.setText("Open image")
+        self.openImageButton.clicked.connect(self.OnOpenImageButtonClick)
 
         self.setPalette(self.palette)
         self.show()
@@ -806,6 +791,21 @@ class Application(QMainWindow):
         if self.executionButton.text() == "Start Program":
             self.updateThread.UpdateToolState(1)
             self.SetProductID(self.data_acode, self.data_sn)
+
+    # Execute when pressing open image button
+    def OnOpenImageButtonClick(self):
+        # Open image
+        imagePath = ImageData.GetLatestImage(self.data_productName, self.data_sn)
+
+        if imagePath is not False:
+            filename, file_extension = os.path.splitext(imagePath)
+            original = filename + "_Original" + file_extension
+            processed = filename + "_Processed" + file_extension
+
+            OpenFile.openImage(original)
+            OpenFile.openImage(processed)
+        else:
+            print("No recent image to show")
 
     # Execute when pressing confirm button
     def OnConfirmButtonClick(self):

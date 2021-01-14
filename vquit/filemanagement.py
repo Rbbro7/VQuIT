@@ -412,3 +412,22 @@ class ImageData:
         # Write updated database to JSON file
         with open('VQuIT_ImageDatabase.json', 'w') as database:
             json.dump(databaseData, database)
+
+    def GetLatestImage(self, productName, sn):
+        if productName is not None and sn is not None:
+            json = self.ImportJSON()
+
+            # Set target key
+            targetKey = str(productName) + "-" + str(sn)
+
+            # Retrieve data
+            with open('VQuIT_ImageDatabase.json', 'r') as database:
+                databaseData = json.load(database)
+
+            # Find key in database
+            for key in databaseData.keys():
+                if key == targetKey:
+                    # Return latest image of product
+                    return str(databaseData[key]["Images"][-1]["FileLocation"])
+
+        return False
