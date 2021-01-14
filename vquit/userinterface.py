@@ -35,6 +35,8 @@ class Application(QMainWindow):
         self.data_Bottom_BlackLevel = None
         self.data_Bottom_Lighting = None
 
+        self.productInfoTabAddHeight = 20
+
         # Standard messages
         self.productInfoLabel1_Text = "Choose of one the following methods to scan a product:"
         self.productInfoLabel1_Text += "\n- Scan article code"
@@ -95,7 +97,7 @@ class Application(QMainWindow):
 
         # Tool visualisation
         self.toolStateOffset = 20
-        self.toolStateWidth = round(self.windowWidth / 5) - (2 * self.toolStateOffset)
+        self.toolStateWidth = round(self.windowWidth / 5) - (2 * self.toolStateOffset) - self.productInfoTabAddHeight
         self.toolStateX = self.windowWidth - (self.toolStateWidth + self.toolStateOffset)
         self.toolStateY = self.windowHeight - (self.toolStateWidth + self.toolStateOffset)
 
@@ -205,6 +207,7 @@ class Application(QMainWindow):
             settingsInputField.adjustSize()
             self.settingsInputFields.append(settingsInputField)
 
+        # Create product selector group
         self.confirmButton = QtWidgets.QPushButton(self)
         self.confirmButton.setText("Confirm")
         self.confirmButton.setMinimumHeight(50)
@@ -232,6 +235,44 @@ class Application(QMainWindow):
         self.productInfoGroup = QtWidgets.QGroupBox("Product info")
         self.productInfoGroup.setLayout(layout)
         self.productInfoGroup.setStyleSheet("color: white")
+
+        # Lighting input field
+        self.lightingInputFields = []
+        lightingInputFieldsPlaceholder = ["U1", "U2", "U3", "U4", "D1", "D2", "D3", "D4"]
+        lightingInputFieldsPlaceholder.extend(lightingInputFieldsPlaceholder)
+
+        # Allowed: numbers between 0 and 255
+        validator = QtGui.QIntValidator(0, 255, self)
+
+        # Create input fields for each placeholder
+        for field in range(0, len(lightingInputFieldsPlaceholder)):
+            lightingInputField = QtWidgets.QLineEdit(self)
+            lightingInputField.setPlaceholderText(lightingInputFieldsPlaceholder[field])
+            lightingInputField.setValidator(validator)
+            lightingInputField.setStyleSheet("QLineEdit { background-color: #4f4f4f };")
+            lightingInputField.adjustSize()
+            self.lightingInputFields.append(lightingInputField)
+
+        # Create top light layout
+        layout = QtWidgets.QHBoxLayout()
+
+        index = 0
+        for i in range(0, int(len(lightingInputFieldsPlaceholder) / 2)):
+            layout.addWidget(self.lightingInputFields[index])
+            index += 1
+
+        self.topLightingInputField = QtWidgets.QWidget()
+        self.topLightingInputField.setLayout(layout)
+
+        # Create bottom light layout
+        layout = QtWidgets.QHBoxLayout()
+
+        for i in range(0, int(len(lightingInputFieldsPlaceholder) / 2)):
+            layout.addWidget(self.lightingInputFields[index])
+            index += 1
+
+        self.bottomLightingInputField = QtWidgets.QWidget()
+        self.bottomLightingInputField.setLayout(layout)
 
         # Add widgets to settings group
         layout = QtWidgets.QGridLayout()
@@ -292,7 +333,7 @@ class Application(QMainWindow):
 
         # Lighting (Top)
         layout.addWidget(QtWidgets.QLabel("Lighting"), row, 0)
-        layout.addWidget(QtWidgets.QLabel("Coming soon"), row, 1)
+        layout.addWidget(self.topLightingInputField, row, 1)
         row += 1
 
         # Bottom camera settings
@@ -325,10 +366,10 @@ class Application(QMainWindow):
 
         # Lighting (Bottom)
         layout.addWidget(QtWidgets.QLabel("Lighting"), row, 0)
-        layout.addWidget(QtWidgets.QLabel("Coming soon"), row, 1)
+        layout.addWidget(self.bottomLightingInputField, row, 1)
         row += 2
 
-        # Lighting (Bottom)
+        # Save button
         layout.addWidget(self.saveButton, row, 0, 1, 2)
 
         layout.setRowStretch(row - 1, 1)  # Makes sure content is aligned to top and button to bottom
@@ -361,7 +402,7 @@ class Application(QMainWindow):
 
         self.tabMenuOffset = 20
         self.tabMenuX = self.previewWindowWidth + self.tabMenuOffset + 20
-        self.tabMenuHeight = self.previewWindowHeight - self.tabMenuOffset
+        self.tabMenuHeight = self.previewWindowHeight - self.tabMenuOffset + self.productInfoTabAddHeight
         self.tabMenuWidth = self.windowWidth - self.previewWindowWidth - (self.tabMenuOffset * 2) - 20
 
         self.tabMenu = QtWidgets.QTabWidget(self)
@@ -786,6 +827,7 @@ class Application(QMainWindow):
 
         # Create array to store field inputs
         fieldValues = []
+        lightValues = []
 
         # Track invalid fields
         invalidFields = 0
@@ -813,9 +855,31 @@ class Application(QMainWindow):
             # Store value
             fieldValues.append([field, value])
 
+        for lights in range(0, len(self.lightingInputFields)):
+            # Get location of linked validator
+            validatorLocation = self.lightingInputFields[lights].validator()
+
+            # Check if location exists
+            if validatorLocation is not None:
+
+                # Retrieve state and value from validator
+                state, value, _ = validatorLocation.validate(self.lightingInputFields[lights].text(), 0)
+
+                # Disregard value if input is invalid
+                if state != QtGui.QValidator.Acceptable:
+                    value = None
+                    invalidFields += 1
+            else:
+                # Field does not have validator
+                value = inputFields[lights].text()
+                print("No validator found")
+
+            # Store value
+            lightValues.append([lights, value])
+
         if invalidFields == 0:
             # Convert GUI input field data to json object
-            jsonObject = ProductData.JsonfyProductInfo(fieldValues)
+            jsonObject = ProductData.JsonfyProductInfo(fieldValues, lightValues)
 
             # Append or modify database
             if self.addingNewProduct:
@@ -894,6 +958,20 @@ class Application(QMainWindow):
         self.settingsInputFields[5].setText(str(productData["BottomCameras"]["ExposureTime"]))
         self.settingsInputFields[6].setText(str(productData["BottomCameras"]["Gain"]))
         self.settingsInputFields[7].setText(str(productData["BottomCameras"]["BlackLevel"]))
+
+        row = round(len(self.lightingInputFields) / 4)
+        for inputField in range(0, len(self.lightingInputFields)):
+            if inputField < (row * 1):
+                lightValue = productData["TopCameras"]["Lighting"]["U"][inputField]
+            elif inputField < (row * 2):
+                lightValue = productData["TopCameras"]["Lighting"]["D"][inputField - row * 1]
+            elif inputField < (row * 3):
+                lightValue = productData["BottomCameras"]["Lighting"]["U"][inputField - row * 2]
+            elif inputField < (row * 4):
+                lightValue = productData["BottomCameras"]["Lighting"]["D"][inputField - row * 3]
+            else:
+                raise Warning("Too much lighting inputs")
+            self.lightingInputFields[inputField].setText(str(lightValue))
 
     # Perform actions before closing interface
     properShutdown = False

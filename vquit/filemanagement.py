@@ -80,7 +80,7 @@ class ProductData:
 
     # Convert GUI input field data to json object
     @staticmethod
-    def JsonfyProductInfo(data):
+    def JsonfyProductInfo(data, lightData):
         productName = data[0][1]
         acode = data[1][1]
         exposureTimeU = data[2][1]
@@ -89,6 +89,13 @@ class ProductData:
         exposureTimeD = data[5][1]
         gainD = data[6][1]
         blackLevelD = data[7][1]
+
+        # Split light data into 4 separate arrays
+        updatedLightData = []
+        for light in range(0, len(lightData)):
+            updatedLightData.append(int(lightData[light][1]))
+        splitLightData = [updatedLightData[x:x + int(len(lightData) / 4)] for x in
+                          range(0, len(updatedLightData), int(len(lightData) / 4))]
 
         jsonObject = {
             str(productName): {
@@ -100,18 +107,8 @@ class ProductData:
                         "Gain": int(gainU),
                         "BlackLevel": int(blackLevelU),
                         "Lighting": {
-                            "U": [
-                                255,
-                                0,
-                                0,
-                                255
-                            ],
-                            "D": [
-                                0,
-                                0,
-                                0,
-                                0
-                            ]
+                            "U": splitLightData[0],
+                            "D": splitLightData[1]
                         }
                     },
                     "BottomCameras": {
@@ -119,18 +116,8 @@ class ProductData:
                         "Gain": int(gainD),
                         "BlackLevel": int(blackLevelD),
                         "Lighting": {
-                            "U": [
-                                0,
-                                0,
-                                0,
-                                0
-                            ],
-                            "D": [
-                                255,
-                                0,
-                                0,
-                                255
-                            ]
+                            "U": splitLightData[2],
+                            "D": splitLightData[3]
                         }
                     }
                 }
