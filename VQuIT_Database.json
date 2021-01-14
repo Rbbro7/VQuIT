@@ -180,15 +180,15 @@
     "Acode": 77777,
     "Configuration": {
       "TopCameras": {
-        "ExposureTime": 150000,
+        "ExposureTime": 1500000,
         "Gain": 1,
         "BlackLevel": 640,
         "Lighting": {
           "U": [
-            255,
+            100,
             0,
             0,
-            255
+            200
           ],
           "D": [
             0,
@@ -204,10 +204,10 @@
         "BlackLevel": 640,
         "Lighting": {
           "U": [
+            200,
             0,
             0,
-            0,
-            0
+            200
           ],
           "D": [
             255,

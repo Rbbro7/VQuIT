@@ -67,5 +67,153 @@
         }
       }
     ]
+  },
+  "Test Camera 1-1200": {
+    "ProductInfo": {
+      "Name": "Test Camera 1",
+      "Acode": 77777,
+      "S/N": 1200
+    },
+    "Images": [
+      {
+        "FileLocation": "S:\\rbbro\\Desktop\\Adimec\\Software\\VQuIT\\Image Database\\Test Camera 1 (77777_1200) - 20210114 221158.png",
+        "Date": "2021-01-14 22:11:58",
+        "Remarks": "No remarks for this scan",
+        "Configuration": {
+          "Lens": "No lens data",
+          "TopCameras": {
+            "ExposureTime": 1500000,
+            "Gain": 1,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              },
+              {
+                "ID": 3,
+                "Intensity": 200
+              }
+            ]
+          },
+          "BottomCameras": {
+            "ExposureTime": 120000,
+            "Gain": 2,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 200
+              },
+              {
+                "ID": 3,
+                "Intensity": 200
+              },
+              {
+                "ID": 4,
+                "Intensity": 255
+              },
+              {
+                "ID": 7,
+                "Intensity": 255
+              }
+            ]
+          }
+        }
+      },
+      {
+        "FileLocation": "S:\\rbbro\\Desktop\\Adimec\\Software\\VQuIT\\Image Database\\Test Camera 1 (77777_1200) - 20210114 221646.png",
+        "Date": "2021-01-14 22:16:46",
+        "Remarks": "No remarks for this scan",
+        "Configuration": {
+          "Lens": "No lens data",
+          "TopCameras": {
+            "ExposureTime": 1500000,
+            "Gain": 1,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 100
+              },
+              {
+                "ID": 3,
+                "Intensity": 200
+              }
+            ]
+          },
+          "BottomCameras": {
+            "ExposureTime": 120000,
+            "Gain": 2,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 0,
+                "Intensity": 200
+              },
+              {
+                "ID": 3,
+                "Intensity": 200
+              },
+              {
+                "ID": 4,
+                "Intensity": 255
+              },
+              {
+                "ID": 7,
+                "Intensity": 255
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "D-12A09-123123": {
+    "ProductInfo": {
+      "Name": "D-12A09",
+      "Acode": 198284,
+      "S/N": 123123
+    },
+    "Images": [
+      {
+        "FileLocation": "S:\\rbbro\\Desktop\\Adimec\\Software\\VQuIT\\Image Database\\D-12A09 (198284_123123) - 20210114 224803.png",
+        "Date": "2021-01-14 22:48:03",
+        "Remarks": "No remarks for this scan",
+        "Configuration": {
+          "Lens": "No lens data",
+          "TopCameras": {
+            "ExposureTime": 150000,
+            "Gain": 1,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 4,
+                "Intensity": 255
+              },
+              {
+                "ID": 7,
+                "Intensity": 255
+              }
+            ]
+          },
+          "BottomCameras": {
+            "ExposureTime": 140000,
+            "Gain": 1,
+            "BlackLevel": 640,
+            "Lighting": [
+              {
+                "ID": 4,
+                "Intensity": 255
+              },
+              {
+                "ID": 7,
+                "Intensity": 255
+              }
+            ]
+          }
+        }
+      }
+    ]
   }
 }

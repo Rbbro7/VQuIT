@@ -415,6 +415,8 @@ class Application(QMainWindow):
         self.productInfoTab.setObjectName("tab1")
         self.settingsTab.setObjectName("tab2")
 
+        self.tabMenu.currentChanged.connect(self.OnTabChange)
+
         self.tabMenu.setStyleSheet("QWidget#tab1 { background-color: #4f4f4f };")
         self.tabMenu.setStyleSheet("QWidget#tab2 { background-color: #4f4f4f };")
         self.tabMenu.setGeometry(self.tabMenuX, self.tabMenuOffset, self.tabMenuWidth, self.tabMenuHeight)
@@ -511,6 +513,13 @@ class Application(QMainWindow):
     # Set value of progressbar
     def UpdateImagePreview(self, value):
         self.image.setPixmap(QtGui.QPixmap(value))
+
+    # Set value of progressbar
+    def SetImagePreviewGraphic(self, index):
+        if index == 0:
+            self.image.setPixmap(QtGui.QPixmap("assets/previewWindow.png"))
+        elif index == 1:
+            self.image.setPixmap(QtGui.QPixmap("assets/lightConfig.png"))
 
     # Set value of progressbar
     def UpdateToolStateImage(self, state):
@@ -904,6 +913,10 @@ class Application(QMainWindow):
 
         else:
             print(str(invalidFields) + " invalid input(s)")  # Improve by specifying which field is invalid
+
+    def OnTabChange(self):
+        tabIndex = self.tabMenu.currentIndex()
+        self.SetImagePreviewGraphic(tabIndex)
 
     # Execute when Dropdown menu has changed
     def OnChange_PI_Dropdown(self):
