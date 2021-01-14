@@ -189,8 +189,8 @@ class Application(QMainWindow):
         self.snInputField.adjustSize()
 
         validator = QtGui.QRegularExpressionValidator(self)
-        # Allowed: numbers (4 to 26 characters)
-        validator.setRegularExpression(QRegularExpression("([0-9]{4,26})"))
+        # Allowed: numbers (4 to 26 characters and first character cannot be 0))
+        validator.setRegularExpression(QRegularExpression("([1-9]{1}[0-9]{3,25})"))
         self.snInputField.setValidator(validator)
 
         self.settingsInputFields = []

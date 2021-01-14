@@ -1,5 +1,5 @@
 from .gigecameras import ImageAcquirer
-from .filemanagement import Configuration, ProductData
+from .filemanagement import Configuration, ProductData, ImageData
 from .raspberry import RaspberryPi
 from .timing import Timer
 from .imageprocessing import OpenCV, Image

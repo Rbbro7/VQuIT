@@ -149,7 +149,9 @@ class OpenCV:
 
     def SaveAsPNG(self, name, image):
         cv2 = self.ImportOpenCV()
-        cv2.imwrite(str(name) + '.png', image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+        # Add file type to the name
+        name += ".png"
+        cv2.imwrite(str(name), image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
     def Abort(self):
         self.ImportOpenCV()

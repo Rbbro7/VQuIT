@@ -226,6 +226,7 @@ class ProductData:
 class ImageData:
     json = None
     datetime = None
+    os = None
 
     def ImportJSON(self):
         if self.json is None:
@@ -244,21 +245,107 @@ class ImageData:
             self.datetime = datetime
         return self.datetime
 
+    # Import os module to retrieve work directory
+    def ImportOS(self):
+        if self.os is None:
+            print("Importing OS")
+            # Import module to read JSON files
+            import os
+            self.os = os
+        return self.os
+
     # Convert GUI input field data to json object
-    def JsonfyProductInfo(self, data, sn, filename, remarks=None, lensData=None):
-        # Work in progress          <----------------------------------------HEREE
+    def JsonfyProductInfo(self, data, sn, remarks=None, lensData=None):
+        # Work in progress
         datetime = self.ImportDateTime()
+        os = self.ImportOS()
 
-        productName = data[0][1]
-        acode = data[1][1]
+        # Get product info
+        productName = data["ProductName"]
+        acode = data["Acode"]
 
-        exposureTimeU = data[2][1]
-        gainU = data[3][1]
-        blackLevelU = data[4][1]
+        cameraConfig = data["Configuration"]["TopCameras"]
+        exposureTimeU = cameraConfig["ExposureTime"]
+        gainU = cameraConfig["Gain"]
+        blackLevelU = cameraConfig["BlackLevel"]
+        lightsTop_U = cameraConfig["Lighting"]["U"]
+        lightsTop_D = cameraConfig["Lighting"]["D"]
 
-        exposureTimeD = data[5][1]
-        gainD = data[6][1]
-        blackLevelD = data[7][1]
+        cameraConfig = data["Configuration"]["BottomCameras"]
+        exposureTimeD = cameraConfig["ExposureTime"]
+        gainD = cameraConfig["Gain"]
+        blackLevelD = cameraConfig["BlackLevel"]
+        lightsBottom_U = cameraConfig["Lighting"]["U"]
+        lightsBottom_D = cameraConfig["Lighting"]["D"]
+
+        lightingTop = {
+            "Lighting": []
+        }
+
+        lightingBottom = {
+            "Lighting": []
+        }
+
+        # Add lights if not set at 0
+        for light in range(0, len(lightsTop_U)):
+            pwmValue = lightsTop_U[light]
+            if pwmValue is not 0:
+                lightID = light
+                newLight = {"Lighting": [{
+                    "ID": int(lightID),
+                    "Intensity": int(pwmValue)
+                }]}
+                lightingTop["Lighting"].extend(newLight["Lighting"])
+
+            pwmValue = lightsBottom_U[light]
+            if pwmValue is not 0:
+                lightID = light
+                newLight = {"Lighting": [{
+                    "ID": int(lightID),
+                    "Intensity": int(pwmValue)
+                }]}
+                lightingBottom["Lighting"].extend(newLight["Lighting"])
+
+        for light in range(0, len(lightsTop_D)):
+            pwmValue = lightsTop_D[light]
+            if pwmValue is not 0:
+                lightID = light + len(lightsTop_U)
+                newLight = {"Lighting": [{
+                    "ID": int(lightID),
+                    "Intensity": int(pwmValue)
+                }]}
+                lightingTop["Lighting"].extend(newLight["Lighting"])
+
+            pwmValue = lightsBottom_D[light]
+            if pwmValue is not 0:
+                lightID = light + len(lightsBottom_U)
+                newLight = {"Lighting": [{
+                    "ID": int(lightID),
+                    "Intensity": int(pwmValue)
+                }]}
+                lightingBottom["Lighting"].extend(newLight["Lighting"])
+
+        # Get current time
+        date = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+        filenameDate = datetime.strptime(date, '%Y-%m-%d %H:%M:%S').strftime('%Y%m%d %H%M%S')
+
+        # Get working directory of script
+        path = os.path.dirname(os.path.realpath(__file__))
+
+        # Hack / workaround to get to parent directory of the main script
+        for i in range(0, 2):
+            path = os.path.dirname(path)
+
+        # Add image directory to folder
+        path += "\\Image Database\\"
+
+        # Check if subdirectory exists and create if not
+        if not os.path.exists(path):
+            print("Creating subdirectory: " + str(path))
+            os.makedirs(path)
+
+        filename = path + str(productName) + " (" + str(acode) + "_" + str(sn) + ") - " + str(
+            filenameDate)
 
         if remarks is None:
             remarks = "No remarks for this scan"
@@ -267,99 +354,74 @@ class ImageData:
             lensData = "No lens data"
 
         jsonObject = {
-            "ProductInfo": {
-                "Name": str(productName),
-                "Acode": int(acode),
-                "S/N": sn
-            },
-            "Images": {
-                "FileLocation": str(filename) + ".png",
-                "Date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
-                "Remarks": remarks,
-                "Configuration": {
-                    "Lens": lensData,
-                    "TopCameras": {
-                        "ExposureTime": int(exposureTimeU),
-                        "Gain": int(gainU),
-                        "BlackLevel": int(blackLevelU),
-                        "Lighting": [
-                            {
-                                "ID": 0,
-                                "Intensity": 100
-                            }
-                        ]
-                    },
-                    "BottomCameras": {
-                        "ExposureTime": int(exposureTimeD),
-                        "Gain": int(gainD),
-                        "BlackLevel": int(blackLevelD),
-                        "Lighting": [
-                            {
-                                "ID": 0,
-                                "Intensity": 100
-                            }
-                        ]
+            str(productName) + "-" + str(sn): {
+                "ProductInfo": {
+                    "Name": str(productName),
+                    "Acode": int(acode),
+                    "S/N": sn
+                },
+                "Images": [{
+                    "FileLocation": str(filename) + ".png",
+                    "Date": date,
+                    "Remarks": remarks,
+                    "Configuration": {
+                        "Lens": lensData,
+                        "TopCameras": {
+                            "ExposureTime": int(exposureTimeU),
+                            "Gain": int(gainU),
+                            "BlackLevel": int(blackLevelU),
+                            "Lighting": lightingTop["Lighting"]
+                        },
+                        "BottomCameras": {
+                            "ExposureTime": int(exposureTimeD),
+                            "Gain": int(gainD),
+                            "BlackLevel": int(blackLevelD),
+                            "Lighting": lightingBottom["Lighting"]
+                        }
                     }
-                }
+                }]
             }
         }
-        return jsonObject
+
+        return jsonObject, filename.replace(os.sep, '/')
 
     # Write to database file
-    def WriteImageInfo(self, jsonObject, append=False, overwrite=False):
-        # Work in progress          <----------------------------------------HEREE
-        # Check if append or overwrite is set and not both/neither
-        if (append or overwrite) and (append != overwrite):
-            json = self.ImportJSON()
+    def WriteImageInfo(self, jsonObject):
 
-            # Retrieve original data
-            with open('VQuIT_ImageDatabase.json', 'r') as database:
-                databaseData = json.load(database)
+        json = self.ImportJSON()
 
-            # Check if key or acode exists
-            authenticProductName = True
-            authenticAcode = True
-            for key in jsonObject.keys():
-                # Check for key
-                if key in databaseData.keys():
-                    authenticProductName = False
+        # Retrieve original data
+        with open('VQuIT_ImageDatabase.json', 'r') as database:
+            databaseData = json.load(database)
 
-                # Check for acode
-                for databaseKey in databaseData.keys():
-                    if jsonObject[key]["Acode"] == databaseData[databaseKey]["Acode"]:
-                        authenticAcode = False
+        # Check if key or acode exists
+        authenticProduct = True
+        for key in jsonObject.keys():
+            # Check for key
+            if key in databaseData.keys():
+                authenticProduct = False
 
-            if append:
-                if authenticProductName and authenticAcode:
-                    print("Appending")
+        if authenticProduct:
+            print("Adding product")
 
-                    # Add JSON object to original database
-                    databaseData.update(jsonObject)
+            # Add JSON object to original database
+            databaseData.update(jsonObject)
 
-                    # Write appended database to JSON file
-                    with open('VQuIT_ImageDatabase.json', 'w') as database:
-                        json.dump(databaseData, database)
-                else:
-                    print("Product name or Acode already in use")
-                    return False
-            elif overwrite:
-                if not authenticProductName:
-                    print("Overwriting")
-
-                    for key in jsonObject.keys():
-                        for databaseKey in databaseData.keys():
-                            if key == databaseKey:
-                                databaseData[databaseKey] = jsonObject[key]
-
-                    # Rewrite database with new data
-                    with open('VQuIT_ImageDatabase.json', 'w') as database:
-                        json.dump(databaseData, database)
-                else:
-                    print("Existing product not found")
-                    return False
-            else:
-                print("Unknown error")
-                return False
         else:
-            print("Set append or overwrite to True in order to write to the database")
-            return False
+            print("Adding to product")
+            for key in jsonObject.keys():
+                # Find matching product
+                for databaseKey in databaseData.keys():
+                    if key == databaseKey:
+                        # Get image dict of product
+                        imageList = databaseData[databaseKey]["Images"]
+
+                        # Extend existing list with new list
+                        imageList.extend(jsonObject[key]["Images"])
+
+                        # Replace original list with updated list
+                        databaseData[databaseKey]["Images"] = imageList
+
+        # Write updated database to JSON file
+        with open('VQuIT_ImageDatabase.json', 'w') as database:
+            json.dump(databaseData, database)

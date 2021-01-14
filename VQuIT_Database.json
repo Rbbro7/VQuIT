@@ -1,1 +1,222 @@
-{"DEFAULT": {"ProductName": "DEFAULT", "Acode": 0, "Configuration": {"TopCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 64, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}, "BottomCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 64, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}}}, "Adimec Camera 1": {"ProductName": "Adimec Camera 1", "Acode": 19463, "Configuration": {"TopCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 640, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}, "BottomCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 640, "Lighting": {"U": [0, 0, 0, 0], "D": [255, 0, 0, 255]}}}}, "Adimec Camera 2": {"ProductName": "Adimec Camera 2", "Acode": 5234, "Configuration": {"TopCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 64, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}, "BottomCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 64, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}}}, "D-12A09": {"ProductName": "D-12A09", "Acode": 198284, "Configuration": {"TopCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 640, "Lighting": {"U": [255, 0, 0, 255], "D": [0, 0, 0, 0]}}, "BottomCameras": {"ExposureTime": 150000, "Gain": 1, "BlackLevel": 640, "Lighting": {"U": [0, 0, 0, 0], "D": [255, 0, 0, 255]}}}}}
+{
+  "DEFAULT": {
+    "ProductName": "DEFAULT",
+    "Acode": 0,
+    "Configuration": {
+      "TopCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 64,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 64,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    }
+  },
+  "Adimec Camera 1": {
+    "ProductName": "Adimec Camera 1",
+    "Acode": 19463,
+    "Configuration": {
+      "TopCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "D": [
+            255,
+            0,
+            0,
+            255
+          ]
+        }
+      }
+    }
+  },
+  "Adimec Camera 2": {
+    "ProductName": "Adimec Camera 2",
+    "Acode": 5234,
+    "Configuration": {
+      "TopCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 64,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 64,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    }
+  },
+  "D-12A09": {
+    "ProductName": "D-12A09",
+    "Acode": 198284,
+    "Configuration": {
+      "TopCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "D": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "D": [
+            255,
+            0,
+            0,
+            255
+          ]
+        }
+      }
+    }
+  },
+  "Test Camera 1": {
+    "ProductName": "Test Camera 1",
+    "Acode": 77777,
+    "Configuration": {
+      "TopCameras": {
+        "ExposureTime": 150000,
+        "Gain": 1,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            101,
+            102,
+            103,
+            104
+          ],
+          "D": [
+            105,
+            106,
+            107,
+            108
+          ]
+        }
+      },
+      "BottomCameras": {
+        "ExposureTime": 120000,
+        "Gain": 2,
+        "BlackLevel": 640,
+        "Lighting": {
+          "U": [
+            201,
+            202,
+            203,
+            204
+          ],
+          "D": [
+            205,
+            206,
+            207,
+            208
+          ]
+        }
+      }
+    }
+  }
+}

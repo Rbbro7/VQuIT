@@ -1,6 +1,5 @@
 # Adimec VQuIT Software (Author: Robin Broeren)
 
-
 #################
 # ALL PROCESSES #
 #################
@@ -23,7 +22,7 @@ def mainProcess(communication_Vars):
      UpdateTerminationFlag, SetFinishedFlag) = communication_Vars
 
     # Import custom module to extract data from config file
-    from vquit import Configuration, OpenCV, Timer, Image, RaspberryPi, ImageAcquirer, ProductData
+    from vquit import Configuration, OpenCV, Timer, Image, RaspberryPi, ImageAcquirer, ProductData, ImageData
     Config = Configuration()
 
     # Import opencv module
@@ -38,6 +37,7 @@ def mainProcess(communication_Vars):
     Image = Image()
 
     ProductData = ProductData()
+    ImageData = ImageData()
 
     # Start Raspberry
     IO = RaspberryPi(Config_module=Config,
@@ -94,7 +94,8 @@ def mainProcess(communication_Vars):
 
             print("Fetch time: ", "{0:.3f}".format(FetchTimer.Stop()), "s")
 
-            # print(len(fetchedImages[0]), len(fetchedImages[0][0]))  # Temporary (shows actual ROI)
+            # Set tool state to idle
+            UpdateToolState(setState=0)
 
             # Set lights in idle mode
             IO.IdleLights()
@@ -118,42 +119,15 @@ def mainProcess(communication_Vars):
             processedGrid = Image.Grid(processedImages)
             GUI_UpdatePreviewWindow(processedGrid)
 
-            #################################
-            # Temporary requirement testing #
-            #################################
+            jsonObject, filename = ImageData.JsonfyProductInfo(productInfo, sn)
+            ImageData.WriteImageInfo(jsonObject)
 
-            loopTime = LoopTimer.Stop()
-            loopTime = round(loopTime, 1)
+            # Save images to database as png
+            CV.SaveAsPNG((str(filename) + "_Original"), fetchedGrid)
+            CV.SaveAsPNG((str(filename) + "_Processed"), processedGrid)
 
-            c = Config.Get("Cameras")
-            acquisition = c["Generic"]["AcquisitionControl"]
-            cameraInfo = c["Advanced"]
-
-            exposureTime = acquisition["ExposureTime"]["Value"]
-            gain = cameraInfo[0]["Gain"]["Value"]
-            blackLevel = cameraInfo[0]["BlackLevel"]["Value"]
-
-            # Color correction values
-            ccTable = []
-            ccData = Config.Get("Cameras")["Advanced"]
-            for i in range(0, Config.Get("QuickSettings")["ActiveCameras"]):
-                ccTable.append([ccData[i]["ColorCorrection"]["Red"],
-                                ccData[i]["ColorCorrection"]["Green"],
-                                ccData[i]["ColorCorrection"]["Blue"]])
-
-            lightingConfigUp = Config.Get("Lighting")["PWM_value"]["TopCamera"]["U"]
-            lightingConfigDown = Config.Get("Lighting")["PWM_value"]["TopCamera"]["D"]
-
-            title = "CameraEGB(" + str(exposureTime) + "," + str(gain) + "," + str(blackLevel) + ").Lighting(" + str(
-                lightingConfigUp) + str(lightingConfigDown) + ").CC(" + str(ccTable[0]) + ").Time(" + str(
-                loopTime) + ")."
-
-            # Save images to png
-            CV.SaveAsPNG((str(title) + "Original"), fetchedGrid)
-            CV.SaveAsPNG((str(title) + "Processed"), processedGrid)
-
-            # Set tool state to idle
-            UpdateToolState(setState=0)
+            # Print loop duration
+            print("Loop time: ", "{0:.3f}".format(LoopTimer.Stop()), "s")
 
         elif terminationFlag == 0:
             # Idle mode
@@ -182,16 +156,13 @@ def mainProcess(communication_Vars):
 
 # Image processing function run on children
 def analysisProcess(communication_Vars):
-    from vquit import Configuration, Image, ProductData, OpenCV
+    from vquit import Configuration, Image, OpenCV
 
     # Extract data from config file
     Config = Configuration()
 
     # Perform actions on images
     Image = Image()
-
-    # Extract product data from images
-    ProductData = ProductData()
 
     # Perform image analysis
     CV = OpenCV()
